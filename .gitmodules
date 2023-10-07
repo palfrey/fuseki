@@ -1,0 +1,3 @@
+[submodule "gnugo"]
+	path = gnugo
+	url = git://git.savannah.gnu.org/gnugo.git
