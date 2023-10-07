@@ -283,6 +283,7 @@ name = "fuseki"
 version = "0.1.0"
 dependencies = [
  "env_logger 0.10.0",
+ "gtp",
  "libremarkable",
  "log",
 ]
@@ -305,6 +306,12 @@ dependencies = [
  "color_quant",
  "weezl",
 ]
+
+[[package]]
+name = "gtp"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e0710cb49e5c1d38d9186d4ded99786e59259e326b32e8dcf1b194188b0a0302"
 
 [[package]]
 name = "hermit-abi"
