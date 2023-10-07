@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use gtp::controller::Engine;
+use gtp::{controller::Engine, Response};
 use gtp::Command;
 use libremarkable::{
     appctx, cgmath::{self, Point2},
@@ -27,6 +27,7 @@ const BORDER_WIDTH: u32 = 10;
 fn loop_update_topbar(app: &mut appctx::ApplicationContext<'_>, millis: u64) {}
 
 fn draw_piece(fb: &mut Framebuffer, x: u8, y: u8, white: bool) {
+    info!("draw_piece: {x} {y} {white}");
     let point = cgmath::Point2 {
         x: (SPARE_WIDTH + (SQUARE_SIZE * x as u16)) as i32,
         y: (SPARE_HEIGHT + (SQUARE_SIZE * y as u16)) as i32,
@@ -37,10 +38,27 @@ fn draw_piece(fb: &mut Framebuffer, x: u8, y: u8, white: bool) {
     }
 }
 
+fn get_response(ctrl: &mut Engine) -> Response {
+    loop {
+        match ctrl.wait_response(Duration::from_secs(1)) {
+            Ok(resp) => {
+                return resp;
+            }
+            Err(gtp::controller::Error::PollAgain) => {
+                continue
+            }
+            Err(err) => {
+                panic!("Other error {err:?}")
+            }
+        }
+    }
+}
+
 fn do_machine_move(ctrl: &mut Engine, fb: &mut Framebuffer) {
     ctrl.send(Command::new_with_args("genmove", |e| e.
     s("black")));
-    let resp = ctrl.wait_response(Duration::from_millis(500)).unwrap();
+    let resp = get_response(ctrl);
+    info!("machine: {}", resp.text());
     let ev = resp.entities(|ep| ep.vertex()).unwrap();
     match ev.first().unwrap() {
         gtp::Entity::Vertex((x,y)) => {
@@ -48,6 +66,15 @@ fn do_machine_move(ctrl: &mut Engine, fb: &mut Framebuffer) {
         }
         _ => {}
     }
+}
+
+fn do_human_move(ctrl: &mut Engine, fb: &mut Framebuffer, pos: Point2<u8>) {
+    let cmd = Command::new_with_args("play", |e| e.s("white").v((pos.x as i32, pos.y as i32)).list());
+    info!("human: {}", cmd.to_string());
+    ctrl.send(cmd);
+    let resp = get_response(ctrl);
+    info!("human resp: {}", resp.text());
+    draw_piece(fb, pos.x, pos.y, true);
 }
 
 fn refresh(fb: &mut Framebuffer) {
@@ -110,7 +137,7 @@ fn main() {
 
     // Blocking call to process events from digitizer + touchscreen + physical buttons
     app.start_event_loop(true, true, true, |ctx, evt| match evt {
-        InputEvent::MultitouchEvent { event } => on_multitouch_event(ctx, event),
+        InputEvent::MultitouchEvent { event } => on_multitouch_event(ctx, event, &mut ctrl),
         ev => {
             info!("event: {ev:?}");
         }
@@ -125,14 +152,16 @@ fn nearest_spot(x: u16, y: u16) -> Point2<u8> {
     }
 }
 
-fn on_multitouch_event(ctx: &mut appctx::ApplicationContext<'_>, event: MultitouchEvent) {
+fn on_multitouch_event(ctx: &mut appctx::ApplicationContext<'_>, event: MultitouchEvent, ctrl: &mut Engine) {
     match event {
         MultitouchEvent::Press { finger } => {
             let fb = ctx.get_framebuffer_ref();
             let point = nearest_spot(finger.pos.x, finger.pos.y);
             let pos = finger.pos;
             info!("Drawing: {point:?} for {pos:?}");
-            draw_piece(fb, point.x, point.y, true);
+            do_human_move(ctrl, fb, point);
+            refresh(fb);
+            do_machine_move(ctrl, fb);
             refresh(fb);
         }
         _ => {}
