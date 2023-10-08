@@ -159,7 +159,7 @@ fn draw_stones(fb: &mut Framebuffer, ev: Vec<gtp::Entity>, white: bool) {
     }
 }
 
-fn draw_state(fb: &mut Framebuffer) {
+fn draw_state(fb: &mut Framebuffer, refresh: bool) {
     let state = *CURRENT_TURN.lock().unwrap();
     info!("draw_state {state:?}");
     let text = if state == State::HumanTurn {
@@ -185,16 +185,18 @@ fn draw_state(fb: &mut Framebuffer) {
         color::BLACK,
         false,
     );
-    refresh_with_options(
-        fb,
-        &mxcfb_rect {
-            top: 0,
-            left: SPARE_WIDTH as u32,
-            width: 800,
-            height: 100,
-        },
-        waveform_mode::WAVEFORM_MODE_AUTO,
-    );
+    if refresh {
+        refresh_with_options(
+            fb,
+            &mxcfb_rect {
+                top: 0,
+                left: SPARE_WIDTH as u32,
+                width: 800,
+                height: 100,
+            },
+            waveform_mode::WAVEFORM_MODE_AUTO,
+        );
+    }
 }
 
 fn redraw_stones(ctrl: &mut Engine, fb: &mut Framebuffer) {
@@ -204,7 +206,7 @@ fn redraw_stones(ctrl: &mut Engine, fb: &mut Framebuffer) {
     draw_stones(fb, white_stones, true);
     let black_stones = list_stones(ctrl, "black");
     draw_stones(fb, black_stones, false);
-    draw_state(fb);
+    draw_state(fb, false);
     refresh(fb);
     let elapsed = start.elapsed();
     info!("redraw elapsed: {:.2?}", elapsed);
@@ -213,7 +215,7 @@ fn redraw_stones(ctrl: &mut Engine, fb: &mut Framebuffer) {
 fn set_state(state: State, fb: &mut Framebuffer) {
     info!("Set state {state:?}");
     *CURRENT_TURN.lock().unwrap() = state;
-    draw_state(fb);
+    draw_state(fb, true);
 }
 
 fn main() {
@@ -221,7 +223,6 @@ fn main() {
     let mut app: appctx::ApplicationContext<'_> = appctx::ApplicationContext::default();
 
     let fb = app.get_framebuffer_ref();
-    draw_grid(fb);
 
     info!("Starting GnuGo");
     let mut ctrl = Engine::new("./gnugo", &["--mode", "gtp", "--level", "8"]);
@@ -248,9 +249,17 @@ fn main() {
 }
 
 fn nearest_spot(x: u16, y: u16) -> Point2<u8> {
-    Point2 {
-        x: (((x - SPARE_WIDTH) as f32) / (SQUARE_SIZE as f32)).round() as u8,
-        y: (((y - SPARE_HEIGHT) as f32) / (SQUARE_SIZE as f32)).round() as u8,
+    let raw_point = Point2::<f32> {
+        x: (((x - SPARE_WIDTH) as f32) / (SQUARE_SIZE as f32)).round(),
+        y: (((y - SPARE_HEIGHT) as f32) / (SQUARE_SIZE as f32)).round()
+    };
+    if raw_point.x < 0.0 || raw_point.y < 0.0 {
+        return Point2 {x: BOARD_SIZE, y: BOARD_SIZE}
+    } else {
+        Point2 {
+            x: raw_point.x as u8,
+            y: raw_point.y as u8,
+        }
     }
 }
 
@@ -268,7 +277,7 @@ fn on_multitouch_event(
             let fb = ctx.get_framebuffer_ref();
             let point = nearest_spot(finger.pos.x, finger.pos.y);
             let pos = finger.pos;
-            if point.x > BOARD_SIZE || point.y > BOARD_SIZE {
+            if point.x >= BOARD_SIZE || point.y >= BOARD_SIZE {
                 info!("Bad point {point:?}");
                 return;
             }
