@@ -160,6 +160,7 @@ fn draw_stones(fb: &mut Framebuffer, ev: Vec<gtp::Entity>, white: bool) {
 }
 
 fn draw_state(fb: &mut Framebuffer, refresh: bool) {
+    let rect_width = 550;
     let state = *CURRENT_TURN.lock().unwrap();
     info!("draw_state {state:?}");
     let text = if state == State::HumanTurn {
@@ -172,7 +173,10 @@ fn draw_state(fb: &mut Framebuffer, refresh: bool) {
             x: SPARE_WIDTH as i32,
             y: 0,
         },
-        Vector2 { x: 800, y: 100 },
+        Vector2 {
+            x: rect_width,
+            y: 100,
+        },
         color::WHITE,
     );
     fb.draw_text(
@@ -191,12 +195,33 @@ fn draw_state(fb: &mut Framebuffer, refresh: bool) {
             &mxcfb_rect {
                 top: 0,
                 left: SPARE_WIDTH as u32,
-                width: 800,
+                width: rect_width,
                 height: 100,
             },
             waveform_mode::WAVEFORM_MODE_AUTO,
         );
     }
+}
+
+const RESET_BUTTON_TOP_LEFT: Point2<i32> = Point2 {
+    x: (SPARE_WIDTH + AVAILABLE_WIDTH / 2 - 10) as i32,
+    y: 20,
+};
+
+const RESET_BUTTON_SIZE: Vector2<u32> = Vector2 { x: 500, y: 95 };
+
+fn draw_reset(fb: &mut Framebuffer) {
+    fb.draw_rect(RESET_BUTTON_TOP_LEFT, RESET_BUTTON_SIZE, 5, color::BLACK);
+    fb.draw_text(
+        Point2 {
+            x: (SPARE_WIDTH + AVAILABLE_WIDTH / 2) as f32,
+            y: 100.0,
+        },
+        "Reset game",
+        100.0,
+        color::BLACK,
+        false,
+    );
 }
 
 fn redraw_stones(ctrl: &mut Engine, fb: &mut Framebuffer) {
@@ -207,6 +232,7 @@ fn redraw_stones(ctrl: &mut Engine, fb: &mut Framebuffer) {
     let black_stones = list_stones(ctrl, "black");
     draw_stones(fb, black_stones, false);
     draw_state(fb, false);
+    draw_reset(fb);
     refresh(fb);
     let elapsed = start.elapsed();
     info!("redraw elapsed: {:.2?}", elapsed);
@@ -216,6 +242,15 @@ fn set_state(state: State, fb: &mut Framebuffer) {
     info!("Set state {state:?}");
     *CURRENT_TURN.lock().unwrap() = state;
     draw_state(fb, true);
+}
+
+fn reset_game(ctrl: &mut Engine, fb: &mut Framebuffer) {
+    ctrl.send(Command::new_with_args("clear_board", |e| e));
+    let resp = get_response(ctrl);
+    info!("clear_board: {}", resp.text());
+
+    do_machine_move(ctrl);
+    redraw_stones(ctrl, fb);
 }
 
 fn main() {
@@ -232,9 +267,8 @@ fn main() {
         e.i(BOARD_SIZE as u32)
     }));
     ctrl.wait_response(Duration::from_millis(500)).unwrap();
+    reset_game(&mut ctrl, fb);
 
-    do_machine_move(&mut ctrl);
-    redraw_stones(&mut ctrl, fb);
     info!("Init complete. Beginning event dispatch...");
 
     set_state(State::HumanTurn, fb);
@@ -251,10 +285,13 @@ fn main() {
 fn nearest_spot(x: u16, y: u16) -> Point2<u8> {
     let raw_point = Point2::<f32> {
         x: (((x - SPARE_WIDTH) as f32) / (SQUARE_SIZE as f32)).round(),
-        y: (((y - SPARE_HEIGHT) as f32) / (SQUARE_SIZE as f32)).round()
+        y: (((y - SPARE_HEIGHT) as f32) / (SQUARE_SIZE as f32)).round(),
     };
     if raw_point.x < 0.0 || raw_point.y < 0.0 {
-        return Point2 {x: BOARD_SIZE, y: BOARD_SIZE}
+        return Point2 {
+            x: BOARD_SIZE,
+            y: BOARD_SIZE,
+        };
     } else {
         Point2 {
             x: raw_point.x as u8,
@@ -275,6 +312,16 @@ fn on_multitouch_event(
                 return;
             }
             let fb = ctx.get_framebuffer_ref();
+
+            if (finger.pos.x as i32) >= RESET_BUTTON_TOP_LEFT.x
+                && (finger.pos.x as i32) < (RESET_BUTTON_TOP_LEFT.x + RESET_BUTTON_SIZE.x as i32)
+                && (finger.pos.y as i32) >= RESET_BUTTON_TOP_LEFT.y
+                && (finger.pos.y as i32) < (RESET_BUTTON_TOP_LEFT.y + RESET_BUTTON_SIZE.y as i32)
+            {
+                reset_game(ctrl, fb);
+                return;
+            }
+
             let point = nearest_spot(finger.pos.x, finger.pos.y);
             let pos = finger.pos;
             if point.x >= BOARD_SIZE || point.y >= BOARD_SIZE {
