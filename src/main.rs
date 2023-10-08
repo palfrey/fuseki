@@ -71,7 +71,9 @@ fn do_machine_move(ctrl: &mut Engine) {
 
 fn do_human_move(ctrl: &mut Engine, pos: Point2<u8>) -> bool {
     let cmd = Command::new_with_args("play", |e| {
-        e.s("white").v((pos.x as i32, pos.y as i32)).list()
+        e.s("white")
+            .v(((pos.x + 1) as i32, (pos.y + 1) as i32))
+            .list()
     });
     info!("human: {}", cmd.to_string());
     ctrl.send(cmd);
@@ -80,11 +82,11 @@ fn do_human_move(ctrl: &mut Engine, pos: Point2<u8>) -> bool {
     return resp.text() == "";
 }
 
-fn refresh_with_region(fb: &mut Framebuffer, region: &mxcfb_rect) {
+fn refresh_with_options(fb: &mut Framebuffer, region: &mxcfb_rect, waveform: waveform_mode) {
     let marker = fb.partial_refresh(
         region,
         libremarkable::framebuffer::PartialRefreshMode::Async,
-        waveform_mode::WAVEFORM_MODE_GLR16,
+        waveform,
         display_temp::TEMP_USE_REMARKABLE_DRAW,
         dither_mode::EPDC_FLAG_EXP1,
         0,
@@ -94,7 +96,7 @@ fn refresh_with_region(fb: &mut Framebuffer, region: &mxcfb_rect) {
 }
 
 fn refresh(fb: &mut Framebuffer) {
-    refresh_with_region(
+    refresh_with_options(
         fb,
         &mxcfb_rect {
             top: 0,
@@ -102,6 +104,7 @@ fn refresh(fb: &mut Framebuffer) {
             width: libremarkable::dimensions::DISPLAYWIDTH as u32,
             height: libremarkable::dimensions::DISPLAYHEIGHT as u32,
         },
+        waveform_mode::WAVEFORM_MODE_AUTO,
     );
 }
 
@@ -149,7 +152,7 @@ fn draw_stones(fb: &mut Framebuffer, ev: Vec<gtp::Entity>, white: bool) {
     for entity in ev {
         match entity {
             gtp::Entity::Vertex((x, y)) => {
-                draw_piece(fb, x as u8, y as u8, white);
+                draw_piece(fb, (x - 1) as u8, (y - 1) as u8, white);
             }
             _ => {}
         }
@@ -182,7 +185,7 @@ fn draw_state(fb: &mut Framebuffer) {
         color::BLACK,
         false,
     );
-    refresh_with_region(
+    refresh_with_options(
         fb,
         &mxcfb_rect {
             top: 0,
@@ -190,6 +193,7 @@ fn draw_state(fb: &mut Framebuffer) {
             width: 800,
             height: 100,
         },
+        waveform_mode::WAVEFORM_MODE_AUTO,
     );
 }
 
