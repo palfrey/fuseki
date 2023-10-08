@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use gtp::Command;
 use gtp::{controller::Engine, Response};
@@ -70,7 +70,7 @@ fn do_human_move(ctrl: &mut Engine, pos: Point2<u8>) {
 }
 
 fn refresh(fb: &mut Framebuffer) {
-    fb.partial_refresh(
+    let marker = fb.partial_refresh(
         &mxcfb_rect {
             top: 0,
             left: 0,
@@ -84,6 +84,7 @@ fn refresh(fb: &mut Framebuffer) {
         0,
         false,
     );
+    fb.wait_refresh_complete(marker);
 }
 
 fn draw_grid(fb: &mut Framebuffer) {
@@ -108,6 +109,7 @@ fn draw_grid(fb: &mut Framebuffer) {
 }
 
 fn list_stones(ctrl: &mut Engine, color: &str) -> Vec<gtp::Entity> {
+    let start = Instant::now();
     let cmd = Command::new_with_args("list_stones", |e| e.s(color));
     // info!("list_stones: {}", cmd.to_string());
     ctrl.send(cmd);
@@ -120,6 +122,8 @@ fn list_stones(ctrl: &mut Engine, color: &str) -> Vec<gtp::Entity> {
         }
         ret
     });
+    let elapsed = start.elapsed();
+    info!("list_stones elapsed: {:.2?}", elapsed);
     return ev.unwrap();
 }
 
@@ -135,12 +139,15 @@ fn draw_stones(fb: &mut Framebuffer, ev: Vec<gtp::Entity>, white: bool) {
 }
 
 fn redraw_stones(ctrl: &mut Engine, fb: &mut Framebuffer) {
+    let start = Instant::now();
     draw_grid(fb);
     let white_stones = list_stones(ctrl, "white");
     draw_stones(fb, white_stones, true);
     let black_stones = list_stones(ctrl, "black");
     draw_stones(fb, black_stones, false);
     refresh(fb);
+    let elapsed = start.elapsed();
+    info!("redraw elapsed: {:.2?}", elapsed);
 }
 
 fn main() {
@@ -151,7 +158,7 @@ fn main() {
     draw_grid(fb);
 
     info!("Starting GnuGo");
-    let mut ctrl = Engine::new("./gnugo", &["--mode", "gtp"]);
+    let mut ctrl = Engine::new("./gnugo", &["--mode", "gtp", "--level", "8"]);
     assert!(ctrl.start().is_ok());
 
     ctrl.send(Command::new_with_args("boardsize", |e| {
@@ -189,6 +196,10 @@ fn on_multitouch_event(
             let fb = ctx.get_framebuffer_ref();
             let point = nearest_spot(finger.pos.x, finger.pos.y);
             let pos = finger.pos;
+            if point.x > BOARD_SIZE || point.y > BOARD_SIZE {
+                info!("Bad point {point:?}");
+                return;
+            }
             info!("Drawing: {point:?} for {pos:?}");
             do_human_move(ctrl, point);
             redraw_stones(ctrl, fb);
