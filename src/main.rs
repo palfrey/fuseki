@@ -1,7 +1,9 @@
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use gtp::Command;
 use gtp::{controller::Engine, Response};
+use libremarkable::cgmath::Vector2;
 use libremarkable::{
     appctx,
     cgmath::{self, Point2},
@@ -25,6 +27,14 @@ const SPARE_WIDTH: u16 =
 const SPARE_HEIGHT: u16 =
     (libremarkable::dimensions::DISPLAYHEIGHT - (SQUARE_SIZE * SQUARE_COUNT as u16)) / 2;
 const BORDER_WIDTH: u32 = 10;
+
+#[derive(PartialEq, Debug, Clone, Copy)]
+enum State {
+    HumanTurn = 1,
+    MachineTurn = 2,
+}
+
+static CURRENT_TURN: Mutex<State> = Mutex::new(State::MachineTurn);
 
 fn draw_piece(fb: &mut Framebuffer, x: u8, y: u8, white: bool) {
     // info!("draw_piece: {x} {y} {white}");
@@ -59,7 +69,7 @@ fn do_machine_move(ctrl: &mut Engine) {
     info!("machine: {}", resp.text());
 }
 
-fn do_human_move(ctrl: &mut Engine, pos: Point2<u8>) {
+fn do_human_move(ctrl: &mut Engine, pos: Point2<u8>) -> bool {
     let cmd = Command::new_with_args("play", |e| {
         e.s("white").v((pos.x as i32, pos.y as i32)).list()
     });
@@ -67,24 +77,32 @@ fn do_human_move(ctrl: &mut Engine, pos: Point2<u8>) {
     ctrl.send(cmd);
     let resp = get_response(ctrl);
     info!("human resp: {}", resp.text());
+    return resp.text() == "";
 }
 
-fn refresh(fb: &mut Framebuffer) {
+fn refresh_with_region(fb: &mut Framebuffer, region: &mxcfb_rect) {
     let marker = fb.partial_refresh(
-        &mxcfb_rect {
-            top: 0,
-            left: 0,
-            width: libremarkable::dimensions::DISPLAYWIDTH as u32,
-            height: libremarkable::dimensions::DISPLAYHEIGHT as u32,
-        },
+        region,
         libremarkable::framebuffer::PartialRefreshMode::Async,
-        waveform_mode::WAVEFORM_MODE_AUTO,
+        waveform_mode::WAVEFORM_MODE_GLR16,
         display_temp::TEMP_USE_REMARKABLE_DRAW,
         dither_mode::EPDC_FLAG_EXP1,
         0,
         false,
     );
     fb.wait_refresh_complete(marker);
+}
+
+fn refresh(fb: &mut Framebuffer) {
+    refresh_with_region(
+        fb,
+        &mxcfb_rect {
+            top: 0,
+            left: 0,
+            width: libremarkable::dimensions::DISPLAYWIDTH as u32,
+            height: libremarkable::dimensions::DISPLAYHEIGHT as u32,
+        },
+    );
 }
 
 fn draw_grid(fb: &mut Framebuffer) {
@@ -138,6 +156,43 @@ fn draw_stones(fb: &mut Framebuffer, ev: Vec<gtp::Entity>, white: bool) {
     }
 }
 
+fn draw_state(fb: &mut Framebuffer) {
+    let state = *CURRENT_TURN.lock().unwrap();
+    info!("draw_state {state:?}");
+    let text = if state == State::HumanTurn {
+        "Human turn"
+    } else {
+        "Machine turn"
+    };
+    fb.fill_rect(
+        Point2 {
+            x: SPARE_WIDTH as i32,
+            y: 0,
+        },
+        Vector2 { x: 800, y: 100 },
+        color::WHITE,
+    );
+    fb.draw_text(
+        Point2 {
+            x: SPARE_WIDTH as f32,
+            y: 100.0,
+        },
+        text,
+        100.0,
+        color::BLACK,
+        false,
+    );
+    refresh_with_region(
+        fb,
+        &mxcfb_rect {
+            top: 0,
+            left: SPARE_WIDTH as u32,
+            width: 800,
+            height: 100,
+        },
+    );
+}
+
 fn redraw_stones(ctrl: &mut Engine, fb: &mut Framebuffer) {
     let start = Instant::now();
     draw_grid(fb);
@@ -145,9 +200,16 @@ fn redraw_stones(ctrl: &mut Engine, fb: &mut Framebuffer) {
     draw_stones(fb, white_stones, true);
     let black_stones = list_stones(ctrl, "black");
     draw_stones(fb, black_stones, false);
+    draw_state(fb);
     refresh(fb);
     let elapsed = start.elapsed();
     info!("redraw elapsed: {:.2?}", elapsed);
+}
+
+fn set_state(state: State, fb: &mut Framebuffer) {
+    info!("Set state {state:?}");
+    *CURRENT_TURN.lock().unwrap() = state;
+    draw_state(fb);
 }
 
 fn main() {
@@ -169,6 +231,8 @@ fn main() {
     do_machine_move(&mut ctrl);
     redraw_stones(&mut ctrl, fb);
     info!("Init complete. Beginning event dispatch...");
+
+    set_state(State::HumanTurn, fb);
 
     // Blocking call to process events from digitizer + touchscreen + physical buttons
     app.start_event_loop(true, true, true, |ctx, evt| match evt {
@@ -193,6 +257,10 @@ fn on_multitouch_event(
 ) {
     match event {
         MultitouchEvent::Press { finger } => {
+            if *CURRENT_TURN.lock().unwrap() != State::HumanTurn {
+                info!("Ignoring touch, as machine turn");
+                return;
+            }
             let fb = ctx.get_framebuffer_ref();
             let point = nearest_spot(finger.pos.x, finger.pos.y);
             let pos = finger.pos;
@@ -201,10 +269,15 @@ fn on_multitouch_event(
                 return;
             }
             info!("Drawing: {point:?} for {pos:?}");
-            do_human_move(ctrl, point);
+            if !do_human_move(ctrl, point) {
+                info!("Bad human move");
+                return;
+            }
+            set_state(State::MachineTurn, fb);
             redraw_stones(ctrl, fb);
             do_machine_move(ctrl);
             redraw_stones(ctrl, fb);
+            set_state(State::HumanTurn, fb);
         }
         _ => {}
     }
