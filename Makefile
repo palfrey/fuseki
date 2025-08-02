@@ -1,5 +1,4 @@
-DEVICE_IP ?= '192.168.1.144'
-DEVICE_HOST ?= root@$(DEVICE_IP)
+DEVICE_HOST ?= root@remarkable
 
 deploy-demo:
 	ssh $(DEVICE_HOST) 'killall -q -9 fuseki || true; killall -q -9 tarnish || true'
