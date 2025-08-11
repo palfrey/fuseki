@@ -6,27 +6,21 @@ use gtp::{controller::Engine, Response};
 use libremarkable::cgmath::Vector2;
 use libremarkable::{
     appctx,
-    cgmath::{self, Point2},
+    cgmath::Point2,
     framebuffer::{
-        common::{color, display_temp, dither_mode, mxcfb_rect, waveform_mode},
+        common::{color, mxcfb_rect, waveform_mode},
         core::Framebuffer,
-        FramebufferDraw, FramebufferRefresh,
+        FramebufferDraw,
     },
     input::{InputEvent, MultitouchEvent},
 };
 use log::info;
 
-const BOARD_SIZE: u8 = 9;
-const SQUARE_COUNT: u8 = BOARD_SIZE - 1;
-const AVAILABLE_WIDTH: u16 = libremarkable::dimensions::DISPLAYWIDTH - 200;
-const SQUARE_SIZE: u16 = AVAILABLE_WIDTH / SQUARE_COUNT as u16;
-const CIRCLE_RADIUS: u16 = ((SQUARE_SIZE as f64 / 2_f64) * 0.6) as u16;
-const CIRCLE_BORDER: u16 = 5;
-const SPARE_WIDTH: u16 =
-    (libremarkable::dimensions::DISPLAYWIDTH - (SQUARE_SIZE * SQUARE_COUNT as u16)) / 2;
-const SPARE_HEIGHT: u16 =
-    (libremarkable::dimensions::DISPLAYHEIGHT - (SQUARE_SIZE * SQUARE_COUNT as u16)) / 2;
-const BORDER_WIDTH: u32 = 10;
+use crate::board::{draw_board, nearest_spot, AVAILABLE_WIDTH, BOARD_SIZE, SPARE_WIDTH};
+use crate::drawing::{refresh, refresh_with_options};
+
+mod board;
+mod drawing;
 
 #[derive(PartialEq, Debug, Clone, Copy)]
 enum State {
@@ -35,18 +29,6 @@ enum State {
 }
 
 static CURRENT_TURN: Mutex<State> = Mutex::new(State::MachineTurn);
-
-fn draw_piece(fb: &mut Framebuffer, x: u8, y: u8, white: bool) {
-    // info!("draw_piece: {x} {y} {white}");
-    let point = cgmath::Point2 {
-        x: (SPARE_WIDTH + (SQUARE_SIZE * x as u16)) as i32,
-        y: (SPARE_HEIGHT + (SQUARE_SIZE * y as u16)) as i32,
-    };
-    fb.fill_circle(point, CIRCLE_RADIUS as u32, color::BLACK);
-    if white {
-        fb.fill_circle(point, (CIRCLE_RADIUS - CIRCLE_BORDER) as u32, color::WHITE);
-    }
-}
 
 fn get_response(ctrl: &mut Engine) -> Response {
     loop {
@@ -82,53 +64,6 @@ fn do_human_move(ctrl: &mut Engine, pos: Point2<u8>) -> bool {
     return resp.text() == "";
 }
 
-fn refresh_with_options(fb: &mut Framebuffer, region: &mxcfb_rect, waveform: waveform_mode) {
-    let marker = fb.partial_refresh(
-        region,
-        libremarkable::framebuffer::PartialRefreshMode::Async,
-        waveform,
-        display_temp::TEMP_USE_REMARKABLE_DRAW,
-        dither_mode::EPDC_FLAG_EXP1,
-        0,
-        false,
-    );
-    fb.wait_refresh_complete(marker);
-}
-
-fn refresh(fb: &mut Framebuffer) {
-    refresh_with_options(
-        fb,
-        &mxcfb_rect {
-            top: 0,
-            left: 0,
-            width: libremarkable::dimensions::DISPLAYWIDTH as u32,
-            height: libremarkable::dimensions::DISPLAYHEIGHT as u32,
-        },
-        waveform_mode::WAVEFORM_MODE_AUTO,
-    );
-}
-
-fn draw_grid(fb: &mut Framebuffer) {
-    fb.clear();
-
-    for y in 0..SQUARE_COUNT {
-        for x in 0..SQUARE_COUNT {
-            fb.draw_rect(
-                cgmath::Point2 {
-                    x: (SQUARE_SIZE * (x as u16) + SPARE_WIDTH) as i32,
-                    y: (SQUARE_SIZE * (y as u16) + SPARE_HEIGHT) as i32,
-                },
-                cgmath::Vector2 {
-                    x: SQUARE_SIZE as u32,
-                    y: SQUARE_SIZE as u32,
-                },
-                BORDER_WIDTH,
-                color::BLACK,
-            );
-        }
-    }
-}
-
 fn list_stones(ctrl: &mut Engine, color: &str) -> Vec<gtp::Entity> {
     let start = Instant::now();
     let cmd = Command::new_with_args("list_stones", |e| e.s(color));
@@ -146,17 +81,6 @@ fn list_stones(ctrl: &mut Engine, color: &str) -> Vec<gtp::Entity> {
     let elapsed = start.elapsed();
     info!("list_stones elapsed: {:.2?}", elapsed);
     return ev.unwrap();
-}
-
-fn draw_stones(fb: &mut Framebuffer, ev: Vec<gtp::Entity>, white: bool) {
-    for entity in ev {
-        match entity {
-            gtp::Entity::Vertex((x, y)) => {
-                draw_piece(fb, (x - 1) as u8, (y - 1) as u8, white);
-            }
-            _ => {}
-        }
-    }
 }
 
 fn draw_state(fb: &mut Framebuffer, refresh: bool) {
@@ -224,20 +148,6 @@ fn draw_reset(fb: &mut Framebuffer) {
     );
 }
 
-fn redraw_stones(ctrl: &mut Engine, fb: &mut Framebuffer) {
-    let start = Instant::now();
-    draw_grid(fb);
-    let white_stones = list_stones(ctrl, "white");
-    draw_stones(fb, white_stones, true);
-    let black_stones = list_stones(ctrl, "black");
-    draw_stones(fb, black_stones, false);
-    draw_state(fb, false);
-    draw_reset(fb);
-    refresh(fb);
-    let elapsed = start.elapsed();
-    info!("redraw elapsed: {:.2?}", elapsed);
-}
-
 fn set_state(state: State, fb: &mut Framebuffer) {
     info!("Set state {state:?}");
     *CURRENT_TURN.lock().unwrap() = state;
@@ -282,24 +192,6 @@ fn main() {
     });
 }
 
-fn nearest_spot(x: u16, y: u16) -> Point2<u8> {
-    let raw_point = Point2::<f32> {
-        x: (((x - SPARE_WIDTH) as f32) / (SQUARE_SIZE as f32)).round(),
-        y: (((y - SPARE_HEIGHT) as f32) / (SQUARE_SIZE as f32)).round(),
-    };
-    if raw_point.x < 0.0 || raw_point.y < 0.0 {
-        return Point2 {
-            x: BOARD_SIZE,
-            y: BOARD_SIZE,
-        };
-    } else {
-        Point2 {
-            x: raw_point.x as u8,
-            y: raw_point.y as u8,
-        }
-    }
-}
-
 fn on_multitouch_event(
     ctx: &mut appctx::ApplicationContext<'_>,
     event: MultitouchEvent,
@@ -341,4 +233,16 @@ fn on_multitouch_event(
         }
         _ => {}
     }
+}
+
+fn redraw_stones(ctrl: &mut Engine, fb: &mut Framebuffer) {
+    let start = Instant::now();
+    let white_stones = list_stones(ctrl, "white");
+    let black_stones = list_stones(ctrl, "black");
+    draw_board(fb, white_stones, black_stones);
+    draw_state(fb, false);
+    draw_reset(fb);
+    refresh(fb);
+    let elapsed = start.elapsed();
+    info!("redraw elapsed: {:.2?}", elapsed);
 }
