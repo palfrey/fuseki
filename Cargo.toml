@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-libremarkable = "0.6.2"
-env_logger = "0.10"
+libremarkable = {git="https://github.com/canselcik/libremarkable"}
+env_logger = "0.11"
 log = "0.4"
 gtp = "0.1.2"
