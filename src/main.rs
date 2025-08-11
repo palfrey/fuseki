@@ -23,12 +23,12 @@ mod board;
 mod drawing;
 
 #[derive(PartialEq, Debug, Clone, Copy)]
-enum State {
+enum Turn {
     HumanTurn = 1,
     MachineTurn = 2,
 }
 
-static CURRENT_TURN: Mutex<State> = Mutex::new(State::MachineTurn);
+static CURRENT_TURN: Mutex<Turn> = Mutex::new(Turn::MachineTurn);
 
 fn get_response(ctrl: &mut Engine) -> Response {
     loop {
@@ -83,11 +83,11 @@ fn list_stones(ctrl: &mut Engine, color: &str) -> Vec<gtp::Entity> {
     return ev.unwrap();
 }
 
-fn draw_state(fb: &mut Framebuffer, refresh: bool) {
+fn draw_turn(fb: &mut Framebuffer, refresh: bool) {
     let rect_width = 550;
-    let state = *CURRENT_TURN.lock().unwrap();
-    info!("draw_state {state:?}");
-    let text = if state == State::HumanTurn {
+    let turn: Turn = *CURRENT_TURN.lock().unwrap();
+    info!("draw_turn {turn:?}");
+    let text = if turn == Turn::HumanTurn {
         "Human turn"
     } else {
         "Machine turn"
@@ -148,10 +148,10 @@ fn draw_reset(fb: &mut Framebuffer) {
     );
 }
 
-fn set_state(state: State, fb: &mut Framebuffer) {
-    info!("Set state {state:?}");
-    *CURRENT_TURN.lock().unwrap() = state;
-    draw_state(fb, true);
+fn set_turn(turn: Turn, fb: &mut Framebuffer) {
+    info!("Set turn {turn:?}");
+    *CURRENT_TURN.lock().unwrap() = turn;
+    draw_turn(fb, true);
 }
 
 fn reset_game(ctrl: &mut Engine, fb: &mut Framebuffer) {
@@ -181,7 +181,7 @@ fn main() {
 
     info!("Init complete. Beginning event dispatch...");
 
-    set_state(State::HumanTurn, fb);
+    set_turn(Turn::HumanTurn, fb);
 
     // Blocking call to process events from digitizer + touchscreen + physical buttons
     app.start_event_loop(true, true, true, |ctx, evt| match evt {
@@ -199,7 +199,7 @@ fn on_multitouch_event(
 ) {
     match event {
         MultitouchEvent::Press { finger } => {
-            if *CURRENT_TURN.lock().unwrap() != State::HumanTurn {
+            if *CURRENT_TURN.lock().unwrap() != Turn::HumanTurn {
                 info!("Ignoring touch, as machine turn");
                 return;
             }
@@ -225,11 +225,11 @@ fn on_multitouch_event(
                 info!("Bad human move");
                 return;
             }
-            set_state(State::MachineTurn, fb);
+            set_turn(Turn::MachineTurn, fb);
             redraw_stones(ctrl, fb);
             do_machine_move(ctrl);
             redraw_stones(ctrl, fb);
-            set_state(State::HumanTurn, fb);
+            set_turn(Turn::HumanTurn, fb);
         }
         _ => {}
     }
@@ -240,7 +240,7 @@ fn redraw_stones(ctrl: &mut Engine, fb: &mut Framebuffer) {
     let white_stones = list_stones(ctrl, "white");
     let black_stones = list_stones(ctrl, "black");
     draw_board(fb, white_stones, black_stones);
-    draw_state(fb, false);
+    draw_turn(fb, false);
     draw_reset(fb);
     refresh(fb);
     let elapsed = start.elapsed();
