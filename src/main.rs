@@ -1,26 +1,22 @@
-use std::sync::Mutex;
 use std::time::Duration;
 
 use ::gtp::{controller::Engine, Command};
-use libremarkable::appctx;
+use libremarkable::{appctx, input::InputEvent};
 use log::info;
 
-use crate::board::BOARD_SIZE;
+use crate::{
+    board::BOARD_SIZE,
+    chooser::{Mode, CURRENT_MODE},
+    routine::Routine,
+};
 
 mod board;
+mod chooser;
 mod drawing;
 mod gtp;
 mod machine_game;
 mod reset;
-
-#[derive(PartialEq, Debug, Clone, Copy)]
-enum Mode {
-    Chooser = 1,
-    AgainstMachine = 2,
-    Atari = 3,
-}
-
-static CURRENT_MODE: Mutex<Mode> = Mutex::new(Mode::Chooser);
+mod routine;
 
 fn main() {
     env_logger::init();
@@ -38,5 +34,28 @@ fn main() {
     ctrl.wait_response(Duration::from_millis(500)).unwrap();
     info!("Init complete. Beginning event dispatch...");
 
-    machine_game::run_game(&mut ctrl, fb, &mut app);
+    let mut previous_mode: Option<Mode> = None;
+
+    loop {
+        info!("Starting mode loop");
+        let current_mode = *CURRENT_MODE.lock().expect("Working lock");
+        let current_routine: Box<dyn Routine> = match current_mode {
+            Mode::Chooser => Box::new(chooser::Chooser {}),
+            Mode::AgainstMachine => Box::new(machine_game::MachineGame {}),
+            Mode::Atari => todo!(),
+        };
+        if previous_mode.is_none() || current_mode != previous_mode.unwrap_or(Mode::Chooser) {
+            info!("New mode: {current_mode:?}");
+            current_routine.init(fb, &mut ctrl);
+        }
+        previous_mode = Some(current_mode);
+        app.start_event_loop(true, true, true, |ctx, evt| match evt {
+            InputEvent::MultitouchEvent { event } => {
+                current_routine.on_multitouch_event(ctx, event, &mut ctrl);
+            }
+            ev => {
+                info!("event: {ev:?}");
+            }
+        });
+    }
 }

@@ -1,7 +1,10 @@
-use libremarkable::framebuffer::{
-    common::{display_temp, dither_mode, mxcfb_rect, waveform_mode},
-    core::Framebuffer,
-    FramebufferRefresh,
+use libremarkable::{
+    cgmath::{Point2, Vector2},
+    framebuffer::{
+        common::{color, display_temp, dither_mode, mxcfb_rect, waveform_mode},
+        core::Framebuffer,
+        FramebufferDraw, FramebufferRefresh,
+    },
 };
 
 pub fn refresh_with_options(fb: &mut Framebuffer, region: &mxcfb_rect, waveform: waveform_mode) {
@@ -27,5 +30,19 @@ pub fn refresh(fb: &mut Framebuffer) {
             height: libremarkable::dimensions::DISPLAYHEIGHT as u32,
         },
         waveform_mode::WAVEFORM_MODE_AUTO,
+    );
+}
+
+pub fn draw_text(fb: &mut Framebuffer, text: &str, top_left: Point2<i32>, size: Vector2<u32>) {
+    fb.draw_rect(top_left, size, 5, color::BLACK);
+    fb.draw_text(
+        Point2 {
+            x: (top_left.x + 5) as f32,
+            y: (top_left.y + 80) as f32,
+        },
+        text,
+        100.0,
+        color::BLACK,
+        false,
     );
 }

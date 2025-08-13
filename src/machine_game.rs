@@ -9,15 +9,17 @@ use libremarkable::{
         core::Framebuffer,
         FramebufferDraw,
     },
-    input::{InputEvent, MultitouchEvent},
+    input::MultitouchEvent,
 };
 use log::info;
 
 use crate::{
     board::{draw_board, nearest_spot, BOARD_SIZE, SPARE_WIDTH},
+    chooser::CURRENT_MODE,
     drawing::{refresh, refresh_with_options},
     gtp::{clear_board, do_human_move, get_response, list_stones},
     reset::{draw_reset, RESET_BUTTON_SIZE, RESET_BUTTON_TOP_LEFT},
+    routine::Routine,
 };
 
 #[derive(PartialEq, Debug, Clone, Copy)]
@@ -121,7 +123,8 @@ fn on_multitouch_event(
                 && (finger.pos.y as i32) >= RESET_BUTTON_TOP_LEFT.y
                 && (finger.pos.y as i32) < (RESET_BUTTON_TOP_LEFT.y + RESET_BUTTON_SIZE.y as i32)
             {
-                reset_machine_game(ctrl, fb);
+                *CURRENT_MODE.lock().unwrap() = crate::chooser::Mode::Chooser;
+                ctx.stop();
                 return;
             }
 
@@ -146,13 +149,20 @@ fn on_multitouch_event(
     }
 }
 
-pub fn run_game(ctrl: &mut Engine, fb: &mut Framebuffer, app: &mut appctx::ApplicationContext<'_>) {
-    reset_machine_game(ctrl, fb);
-    set_turn(Turn::HumanTurn, fb);
-    app.start_event_loop(true, true, true, |ctx, evt| match evt {
-        InputEvent::MultitouchEvent { event } => on_multitouch_event(ctx, event, ctrl),
-        ev => {
-            info!("event: {ev:?}");
-        }
-    });
+pub struct MachineGame {}
+
+impl Routine for MachineGame {
+    fn init(&self, fb: &mut Framebuffer, ctrl: &mut Engine) {
+        reset_machine_game(ctrl, fb);
+        set_turn(Turn::HumanTurn, fb);
+    }
+
+    fn on_multitouch_event(
+        &self,
+        ctx: &mut appctx::ApplicationContext<'_>,
+        event: MultitouchEvent,
+        ctrl: &mut Engine,
+    ) {
+        on_multitouch_event(ctx, event, ctrl);
+    }
 }
