@@ -1,6 +1,6 @@
 use std::{sync::Mutex, time::Instant};
 
-use gtp::{controller::Engine, Command};
+use gtp::controller::Engine;
 use libremarkable::{
     appctx,
     cgmath::{Point2, Vector2},
@@ -17,18 +17,19 @@ use crate::{
     board::{draw_board, nearest_spot, BOARD_SIZE, SPARE_WIDTH},
     chooser::CURRENT_MODE,
     drawing::{refresh, refresh_with_options},
-    gtp::{clear_board, do_human_move, get_response, list_stones},
+    gtp::{clear_board, count_captures, do_human_move, list_stones},
     reset::{draw_reset, RESET_BUTTON_SIZE, RESET_BUTTON_TOP_LEFT},
     routine::Routine,
 };
 
 #[derive(PartialEq, Debug, Clone, Copy)]
 enum Turn {
-    HumanTurn = 1,
-    MachineTurn = 2,
+    WhiteTurn = 1,
+    BlackTurn = 2,
 }
 
-static CURRENT_TURN: Mutex<Turn> = Mutex::new(Turn::MachineTurn);
+static CURRENT_TURN: Mutex<Turn> = Mutex::new(Turn::BlackTurn);
+static GAME_END: Mutex<Option<Turn>> = Mutex::new(None);
 
 fn set_turn(turn: Turn, fb: &mut Framebuffer) {
     info!("Set turn {turn:?}");
@@ -36,22 +37,19 @@ fn set_turn(turn: Turn, fb: &mut Framebuffer) {
     draw_turn(fb, true);
 }
 
-fn do_machine_move(ctrl: &mut Engine) {
-    ctrl.send(Command::new_with_args("genmove", |e| e.s("black")));
-    info!("waiting for machine response");
-    let resp = get_response(ctrl);
-    info!("machine: {}", resp.text());
-}
-
 fn draw_turn(fb: &mut Framebuffer, refresh: bool) {
-    let rect_width = 550;
     let turn: Turn = *CURRENT_TURN.lock().unwrap();
     info!("draw_turn {turn:?}");
-    let text = if turn == Turn::HumanTurn {
-        "Human turn"
+    let text = if turn == Turn::WhiteTurn {
+        "White turn"
     } else {
-        "Machine turn"
+        "Black turn"
     };
+    draw_status(fb, text, refresh);
+}
+
+fn draw_status(fb: &mut Framebuffer, text: &str, refresh: bool) {
+    let rect_width = 550;
     fb.fill_rect(
         Point2 {
             x: SPARE_WIDTH as i32,
@@ -87,10 +85,17 @@ fn draw_turn(fb: &mut Framebuffer, refresh: bool) {
     }
 }
 
-fn reset_machine_game(ctrl: &mut Engine, fb: &mut Framebuffer) {
+fn reset_atari_game(ctrl: &mut Engine, fb: &mut Framebuffer) {
     clear_board(ctrl);
-    do_machine_move(ctrl);
     redraw_stones(ctrl, fb);
+}
+
+fn draw_game_state(fb: &mut Framebuffer) {
+    match *GAME_END.lock().unwrap() {
+        None => draw_turn(fb, false),
+        Some(Turn::WhiteTurn) => draw_status(fb, "White win!", true),
+        Some(Turn::BlackTurn) => draw_status(fb, "Black win!", true),
+    }
 }
 
 fn redraw_stones(ctrl: &mut Engine, fb: &mut Framebuffer) {
@@ -98,7 +103,7 @@ fn redraw_stones(ctrl: &mut Engine, fb: &mut Framebuffer) {
     let white_stones = list_stones(ctrl, "white");
     let black_stones = list_stones(ctrl, "black");
     draw_board(fb, white_stones, black_stones);
-    draw_turn(fb, false);
+    draw_game_state(fb);
     draw_reset(fb);
     refresh(fb);
     let elapsed = start.elapsed();
@@ -112,12 +117,6 @@ fn on_multitouch_event(
 ) {
     match event {
         MultitouchEvent::Press { finger } => {
-            if *CURRENT_TURN.lock().unwrap() != Turn::HumanTurn {
-                info!("Ignoring touch, as machine turn");
-                return;
-            }
-            let fb = ctx.get_framebuffer_ref();
-
             if (finger.pos.x as i32) >= RESET_BUTTON_TOP_LEFT.x
                 && (finger.pos.x as i32) < (RESET_BUTTON_TOP_LEFT.x + RESET_BUTTON_SIZE.x as i32)
                 && (finger.pos.y as i32) >= RESET_BUTTON_TOP_LEFT.y
@@ -135,26 +134,46 @@ fn on_multitouch_event(
                 return;
             }
             info!("Drawing: {point:?} for {pos:?}");
-            if !do_human_move(ctrl, point, "white") {
-                info!("Bad human move");
-                return;
-            }
-            set_turn(Turn::MachineTurn, fb);
+            let fb = ctx.get_framebuffer_ref();
+            let current_turn = *CURRENT_TURN.lock().unwrap();
+            match current_turn {
+                Turn::WhiteTurn => {
+                    if !do_human_move(ctrl, point, "white") {
+                        info!("Bad white move");
+                        return;
+                    }
+                    if count_captures(ctrl, "white") > 0 {
+                        info!("White win");
+                        *GAME_END.lock().unwrap() = Some(Turn::WhiteTurn);
+                    } else {
+                        set_turn(Turn::BlackTurn, fb);
+                    }
+                }
+                Turn::BlackTurn => {
+                    if !do_human_move(ctrl, point, "black") {
+                        info!("Bad black move");
+                        return;
+                    }
+                    if count_captures(ctrl, "black") > 0 {
+                        info!("Black win");
+                        *GAME_END.lock().unwrap() = Some(Turn::BlackTurn);
+                    } else {
+                        set_turn(Turn::WhiteTurn, fb);
+                    }
+                }
+            };
             redraw_stones(ctrl, fb);
-            do_machine_move(ctrl);
-            redraw_stones(ctrl, fb);
-            set_turn(Turn::HumanTurn, fb);
         }
         _ => {}
     }
 }
 
-pub struct MachineGame {}
+pub struct AtariGame {}
 
-impl Routine for MachineGame {
+impl Routine for AtariGame {
     fn init(&self, fb: &mut Framebuffer, ctrl: &mut Engine) {
-        reset_machine_game(ctrl, fb);
-        set_turn(Turn::HumanTurn, fb);
+        reset_atari_game(ctrl, fb);
+        set_turn(Turn::BlackTurn, fb);
     }
 
     fn on_multitouch_event(

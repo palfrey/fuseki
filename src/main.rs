@@ -10,6 +10,7 @@ use crate::{
     routine::Routine,
 };
 
+mod atari_game;
 mod board;
 mod chooser;
 mod drawing;
@@ -42,7 +43,7 @@ fn main() {
         let current_routine: Box<dyn Routine> = match current_mode {
             Mode::Chooser => Box::new(chooser::Chooser {}),
             Mode::AgainstMachine => Box::new(machine_game::MachineGame {}),
-            Mode::Atari => todo!(),
+            Mode::Atari => Box::new(atari_game::AtariGame {}),
         };
         if previous_mode.is_none() || current_mode != previous_mode.unwrap_or(Mode::Chooser) {
             info!("New mode: {current_mode:?}");
