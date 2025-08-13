@@ -29,7 +29,9 @@ pub fn get_response(ctrl: &mut Engine) -> Response {
             Ok(resp) => {
                 return resp;
             }
-            Err(gtp::controller::Error::PollAgain) => continue,
+            Err(gtp::controller::Error::PollAgain) => {
+                info!("repoll...");
+            }
             Err(err) => {
                 panic!("Other error {err:?}")
             }
@@ -38,6 +40,7 @@ pub fn get_response(ctrl: &mut Engine) -> Response {
 }
 
 pub fn do_human_move(ctrl: &mut Engine, pos: Point2<u8>, colour: &str) -> bool {
+    let start = Instant::now();
     let cmd = Command::new_with_args("play", |e| {
         e.s(colour)
             .v(((pos.x + 1) as i32, (pos.y + 1) as i32))
@@ -47,15 +50,20 @@ pub fn do_human_move(ctrl: &mut Engine, pos: Point2<u8>, colour: &str) -> bool {
     ctrl.send(cmd);
     let resp = get_response(ctrl);
     info!("human resp: '{}'", resp.text());
+    let elapsed = start.elapsed();
+    info!("human move elapsed: {:.2?}", elapsed);
     return resp.text() == "";
 }
 
 pub fn count_captures(ctrl: &mut Engine, colour: &str) -> usize {
+    let start = Instant::now();
     let cmd = Command::new_with_args("captures", |e| e.s(colour));
     info!("captures: {}", cmd.to_string());
     ctrl.send(cmd);
     let resp = get_response(ctrl);
     info!("captures resp: '{}'", resp.text());
+    let elapsed = start.elapsed();
+    info!("count captures elapsed: {:.2?}", elapsed);
     resp.text().parse::<usize>().unwrap()
 }
 

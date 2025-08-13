@@ -1,8 +1,14 @@
 use gtp::Entity;
 use libremarkable::{
     cgmath::{self, Point2},
-    framebuffer::{common::color, core::Framebuffer, FramebufferDraw},
+    framebuffer::{
+        common::{color, mxcfb_rect, waveform_mode},
+        core::Framebuffer,
+        FramebufferDraw,
+    },
 };
+
+use crate::drawing::refresh_with_options;
 
 pub const BOARD_SIZE: u8 = 9;
 const SQUARE_COUNT: u8 = BOARD_SIZE - 1;
@@ -16,16 +22,22 @@ pub const SPARE_HEIGHT: u16 =
     (libremarkable::dimensions::DISPLAYHEIGHT - (SQUARE_SIZE * SQUARE_COUNT as u16)) / 2;
 const BORDER_WIDTH: u32 = 10;
 
-fn draw_piece(fb: &mut Framebuffer, x: u8, y: u8, white: bool) {
+fn draw_piece(fb: &mut Framebuffer, x: u8, y: u8, white: bool) -> mxcfb_rect {
     // info!("draw_piece: {x} {y} {white}");
-    let point = cgmath::Point2 {
+    let point = Point2 {
         x: (SPARE_WIDTH + (SQUARE_SIZE * x as u16)) as i32,
         y: (SPARE_HEIGHT + (SQUARE_SIZE * y as u16)) as i32,
     };
-    fb.fill_circle(point, CIRCLE_RADIUS as u32, color::BLACK);
+    let rect = fb.fill_circle(point, CIRCLE_RADIUS as u32, color::BLACK);
     if white {
         fb.fill_circle(point, (CIRCLE_RADIUS - CIRCLE_BORDER) as u32, color::WHITE);
     }
+    rect
+}
+
+pub fn refresh_and_draw_one_piece(fb: &mut Framebuffer, x: u8, y: u8, white: bool) {
+    let rect = draw_piece(fb, x, y, white);
+    refresh_with_options(fb, &rect, waveform_mode::WAVEFORM_MODE_AUTO);
 }
 
 fn draw_grid(fb: &mut Framebuffer) {

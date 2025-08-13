@@ -14,7 +14,7 @@ use libremarkable::{
 use log::info;
 
 use crate::{
-    board::{draw_board, nearest_spot, BOARD_SIZE, SPARE_WIDTH},
+    board::{draw_board, nearest_spot, refresh_and_draw_one_piece, BOARD_SIZE, SPARE_WIDTH},
     chooser::CURRENT_MODE,
     drawing::{refresh, refresh_with_options},
     gtp::{clear_board, count_captures, do_human_move, list_stones},
@@ -117,6 +117,7 @@ fn on_multitouch_event(
 ) {
     match event {
         MultitouchEvent::Press { finger } => {
+            let start = Instant::now();
             if (finger.pos.x as i32) >= RESET_BUTTON_TOP_LEFT.x
                 && (finger.pos.x as i32) < (RESET_BUTTON_TOP_LEFT.x + RESET_BUTTON_SIZE.x as i32)
                 && (finger.pos.y as i32) >= RESET_BUTTON_TOP_LEFT.y
@@ -144,9 +145,12 @@ fn on_multitouch_event(
                     }
                     if count_captures(ctrl, "white") > 0 {
                         info!("White win");
+
                         *GAME_END.lock().unwrap() = Some(Turn::WhiteTurn);
+                        redraw_stones(ctrl, fb);
                     } else {
                         set_turn(Turn::BlackTurn, fb);
+                        refresh_and_draw_one_piece(fb, point.x, point.y, true);
                     }
                 }
                 Turn::BlackTurn => {
@@ -157,12 +161,16 @@ fn on_multitouch_event(
                     if count_captures(ctrl, "black") > 0 {
                         info!("Black win");
                         *GAME_END.lock().unwrap() = Some(Turn::BlackTurn);
+                        redraw_stones(ctrl, fb);
                     } else {
                         set_turn(Turn::WhiteTurn, fb);
+                        refresh_and_draw_one_piece(fb, point.x, point.y, false);
                     }
                 }
             };
-            redraw_stones(ctrl, fb);
+
+            let elapsed = start.elapsed();
+            info!("touch elapsed: {:.2?}", elapsed);
         }
         _ => {}
     }
@@ -172,8 +180,8 @@ pub struct AtariGame {}
 
 impl Routine for AtariGame {
     fn init(&self, fb: &mut Framebuffer, ctrl: &mut Engine) {
-        reset_atari_game(ctrl, fb);
         set_turn(Turn::BlackTurn, fb);
+        reset_atari_game(ctrl, fb);
     }
 
     fn on_multitouch_event(
