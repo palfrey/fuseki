@@ -26,8 +26,8 @@ fn main() {
     let fb = app.get_framebuffer_ref();
 
     info!("Starting GnuGo");
-    let mut ctrl = Engine::new("./gnugo", &["--mode", "gtp", "--level", "8"]);
-    assert!(ctrl.start().is_ok());
+    let mut ctrl = Engine::new("/home/root/gnugo", &["--mode", "gtp", "--level", "8"]);
+    ctrl.start().expect("Failure to launch gnugo");
 
     ctrl.send(Command::new_with_args("boardsize", |e| {
         e.i(BOARD_SIZE as u32)
