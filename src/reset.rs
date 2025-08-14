@@ -16,5 +16,5 @@ pub const RESET_BUTTON_TOP_LEFT: Point2<i32> = Point2 {
 pub const RESET_BUTTON_SIZE: Vector2<u32> = Vector2 { x: 500, y: 95 };
 
 pub fn draw_reset(fb: &mut Framebuffer) {
-    draw_text(fb, "Reset game", RESET_BUTTON_TOP_LEFT, RESET_BUTTON_SIZE);
+    draw_text(fb, "Exit game", RESET_BUTTON_TOP_LEFT, RESET_BUTTON_SIZE);
 }

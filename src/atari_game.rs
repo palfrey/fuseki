@@ -14,10 +14,13 @@ use libremarkable::{
 use log::info;
 
 use crate::{
-    board::{draw_board, nearest_spot, refresh_and_draw_one_piece, BOARD_SIZE, SPARE_WIDTH},
+    board::{
+        draw_board, nearest_spot, refresh_and_draw_one_piece, AVAILABLE_WIDTH, BOARD_SIZE,
+        SPARE_WIDTH,
+    },
     chooser::CURRENT_MODE,
-    drawing::{refresh, refresh_with_options},
-    gtp::{clear_board, count_captures, do_human_move, list_stones},
+    drawing::{draw_text, refresh, refresh_with_options},
+    gtp::{clear_board, count_captures, do_human_move, list_stones, undo_move},
     reset::{draw_reset, RESET_BUTTON_SIZE, RESET_BUTTON_TOP_LEFT},
     routine::Routine,
 };
@@ -48,6 +51,13 @@ fn draw_turn(fb: &mut Framebuffer, refresh: bool) {
     draw_status(fb, text, refresh);
 }
 
+pub const UNDO_BUTTON_TOP_LEFT: Point2<i32> = Point2 {
+    x: (SPARE_WIDTH + AVAILABLE_WIDTH / 2 - 10) as i32,
+    y: 120,
+};
+
+pub const UNDO_BUTTON_SIZE: Vector2<u32> = Vector2 { x: 350, y: 95 };
+
 fn draw_status(fb: &mut Framebuffer, text: &str, refresh: bool) {
     let rect_width = 550;
     fb.fill_rect(
@@ -71,6 +81,9 @@ fn draw_status(fb: &mut Framebuffer, text: &str, refresh: bool) {
         color::BLACK,
         false,
     );
+
+    draw_text(fb, "Undo", UNDO_BUTTON_TOP_LEFT, UNDO_BUTTON_SIZE);
+
     if refresh {
         refresh_with_options(
             fb,
@@ -118,6 +131,8 @@ fn on_multitouch_event(
     match event {
         MultitouchEvent::Press { finger } => {
             let start = Instant::now();
+            let fb = ctx.get_framebuffer_ref();
+
             if (finger.pos.x as i32) >= RESET_BUTTON_TOP_LEFT.x
                 && (finger.pos.x as i32) < (RESET_BUTTON_TOP_LEFT.x + RESET_BUTTON_SIZE.x as i32)
                 && (finger.pos.y as i32) >= RESET_BUTTON_TOP_LEFT.y
@@ -128,6 +143,22 @@ fn on_multitouch_event(
                 return;
             }
 
+            if (finger.pos.x as i32) >= UNDO_BUTTON_TOP_LEFT.x
+                && (finger.pos.x as i32) < (UNDO_BUTTON_TOP_LEFT.x + UNDO_BUTTON_SIZE.x as i32)
+                && (finger.pos.y as i32) >= UNDO_BUTTON_TOP_LEFT.y
+                && (finger.pos.y as i32) < (UNDO_BUTTON_TOP_LEFT.y + UNDO_BUTTON_SIZE.y as i32)
+            {
+                if undo_move(ctrl) {
+                    let current_turn = *CURRENT_TURN.lock().unwrap();
+                    match current_turn {
+                        Turn::WhiteTurn => set_turn(Turn::BlackTurn, fb),
+                        Turn::BlackTurn => set_turn(Turn::WhiteTurn, fb),
+                    }
+                    redraw_stones(ctrl, fb);
+                }
+                return;
+            }
+
             let point = nearest_spot(finger.pos.x, finger.pos.y);
             let pos = finger.pos;
             if point.x >= BOARD_SIZE || point.y >= BOARD_SIZE {
@@ -135,7 +166,7 @@ fn on_multitouch_event(
                 return;
             }
             info!("Drawing: {point:?} for {pos:?}");
-            let fb = ctx.get_framebuffer_ref();
+
             let current_turn = *CURRENT_TURN.lock().unwrap();
             match current_turn {
                 Turn::WhiteTurn => {

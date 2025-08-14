@@ -72,3 +72,10 @@ pub fn clear_board(ctrl: &mut Engine) {
     let resp = get_response(ctrl);
     info!("clear_board: {}", resp.text());
 }
+
+pub fn undo_move(ctrl: &mut Engine) -> bool {
+    ctrl.send(Command::new_with_args("undo", |e| e));
+    let resp = get_response(ctrl);
+    info!("undo: {}", resp.text());
+    resp.text().is_empty()
+}
