@@ -19,6 +19,7 @@ pub enum Mode {
     Chooser = 1,
     AgainstMachine = 2,
     Atari = 3,
+    Exit = 4,
 }
 
 pub static CURRENT_MODE: Mutex<Mode> = Mutex::new(Mode::Chooser);
@@ -49,6 +50,15 @@ static BUTTONS: LazyLock<Vec<Button>> = LazyLock::new(|| {
             },
             size: Vector2 { x: 600, y: 95 },
             mode: Mode::Atari,
+        },
+        Button {
+            text: "Exit".to_string(),
+            top_left: Point2 {
+                x: (SPARE_WIDTH + AVAILABLE_WIDTH / 4 - 10) as i32,
+                y: 500,
+            },
+            size: Vector2 { x: 600, y: 95 },
+            mode: Mode::Exit,
         },
     ]
 });

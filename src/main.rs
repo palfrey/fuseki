@@ -44,6 +44,9 @@ fn main() {
             Mode::Chooser => Box::new(chooser::Chooser {}),
             Mode::AgainstMachine => Box::new(machine_game::MachineGame {}),
             Mode::Atari => Box::new(atari_game::AtariGame {}),
+            Mode::Exit => {
+                break;
+            }
         };
         if previous_mode.is_none() || current_mode != previous_mode.unwrap_or(Mode::Chooser) {
             info!("New mode: {current_mode:?}");
