@@ -1,5 +1,5 @@
-use std::sync::{Mutex};
 use lazy_static::lazy_static;
+use std::sync::Mutex;
 
 use gtp::controller::Engine;
 use libremarkable::{
@@ -33,37 +33,37 @@ struct Button {
 }
 
 lazy_static! {
-static ref BUTTONS: Vec<Button> = {
-    vec![
-        Button {
-            text: "Machine game".to_string(),
-            top_left: Point2 {
-                x: (SPARE_WIDTH + AVAILABLE_WIDTH / 4 - 10) as i32,
-                y: 100,
+    static ref BUTTONS: Vec<Button> = {
+        vec![
+            Button {
+                text: "Machine game".to_string(),
+                top_left: Point2 {
+                    x: (SPARE_WIDTH + AVAILABLE_WIDTH / 4 - 10) as i32,
+                    y: 100,
+                },
+                size: Vector2 { x: 600, y: 95 },
+                mode: Mode::AgainstMachine,
             },
-            size: Vector2 { x: 600, y: 95 },
-            mode: Mode::AgainstMachine,
-        },
-        Button {
-            text: "Atari game".to_string(),
-            top_left: Point2 {
-                x: (SPARE_WIDTH + AVAILABLE_WIDTH / 4 - 10) as i32,
-                y: 300,
+            Button {
+                text: "Atari game".to_string(),
+                top_left: Point2 {
+                    x: (SPARE_WIDTH + AVAILABLE_WIDTH / 4 - 10) as i32,
+                    y: 300,
+                },
+                size: Vector2 { x: 600, y: 95 },
+                mode: Mode::Atari,
             },
-            size: Vector2 { x: 600, y: 95 },
-            mode: Mode::Atari,
-        },
-        Button {
-            text: "Exit".to_string(),
-            top_left: Point2 {
-                x: (SPARE_WIDTH + AVAILABLE_WIDTH / 4 - 10) as i32,
-                y: 500,
+            Button {
+                text: "Exit".to_string(),
+                top_left: Point2 {
+                    x: (SPARE_WIDTH + AVAILABLE_WIDTH / 4 - 10) as i32,
+                    y: 500,
+                },
+                size: Vector2 { x: 600, y: 95 },
+                mode: Mode::Exit,
             },
-            size: Vector2 { x: 600, y: 95 },
-            mode: Mode::Exit,
-        },
-    ]
-};
+        ]
+    };
 }
 
 fn draw_chooser(fb: &mut Framebuffer) {
