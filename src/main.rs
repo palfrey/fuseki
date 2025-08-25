@@ -26,7 +26,8 @@ fn main() {
     let fb = app.get_framebuffer_ref();
 
     info!("Starting GnuGo");
-    let mut ctrl = Engine::new("/home/root/gnugo", &["--mode", "gtp", "--level", "8"]);
+    let gnugo_path = std::env::var("GNUGO_BINARY").unwrap_or("/home/root/gnugo".into());
+    let mut ctrl = Engine::new(&gnugo_path, &["--mode", "gtp", "--level", "8"]);
     ctrl.start().expect("Failure to launch gnugo");
 
     ctrl.send(Command::new_with_args("boardsize", |e| {
