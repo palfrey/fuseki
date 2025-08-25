@@ -1,0 +1,14 @@
+name: CI
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    container: ghcr.io/toltec-dev/rust:v3.1
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4        
+      - name: Build
+        run: cargo build --release
