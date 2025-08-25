@@ -2,9 +2,7 @@
 
 [Fuseki](https://senseis.xmp.net/?Fuseki) is a Go frontend for Remarkable tablets. It uses a copy of [GNU Go](https://github.com/palfrey/gnugo) to do most of the engine work, running locally on the tablets, with a few patches for cross-compiling. Note this has all only been tested on a Remarkable 1, as hacking a 2 is a moving target (and my 2 is my actually used tablet v.s. the 1 which is just for hacking around).
 
-<img src="screenshots/start menu.jpg" width="200" />
-<img src="screenshots/machine game.jpg" width="200" />
-<img src="screenshots/atari game.jpg" width="200" />
+<table style="border: 0px; border-style: none; border-spacing: 0px" spacing="0"><tr><td><img src="screenshots/start menu.jpg" width="200" /></td><td><img src="screenshots/machine game.jpg" width="200" /></td><td><img src="screenshots/atari game.jpg" width="200" /></tr></table>
 
 The [Toltec toolchain](https://github.com/toltec-dev/toolchain) is used for the build and we provide [Draft](https://github.com/dixonary/draft-reMarkable?tab=readme-ov-file#draft-remarkable) config for launching.
 
