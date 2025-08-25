@@ -1,4 +1,5 @@
-use std::sync::{LazyLock, Mutex};
+use std::sync::{Mutex};
+use lazy_static::lazy_static;
 
 use gtp::controller::Engine;
 use libremarkable::{
@@ -31,7 +32,8 @@ struct Button {
     mode: Mode,
 }
 
-static BUTTONS: LazyLock<Vec<Button>> = LazyLock::new(|| {
+lazy_static! {
+static ref BUTTONS: Vec<Button> = {
     vec![
         Button {
             text: "Machine game".to_string(),
@@ -61,7 +63,8 @@ static BUTTONS: LazyLock<Vec<Button>> = LazyLock::new(|| {
             mode: Mode::Exit,
         },
     ]
-});
+};
+}
 
 fn draw_chooser(fb: &mut Framebuffer) {
     fb.clear();
