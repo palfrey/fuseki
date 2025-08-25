@@ -6,7 +6,9 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    container: ghcr.io/toltec-dev/rust:v3.1
+    container:
+      image: ghcr.io/toltec-dev/rust:v3.1
+      options: --user root
     steps:
       - name: Check out repository code
         uses: actions/checkout@v4        
