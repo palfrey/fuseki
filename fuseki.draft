@@ -2,4 +2,4 @@ name=fuseki
 desc=Play go
 call=/home/root/fuseki
 term=killall fuseki
-imgFile=xochitl
+imgFile=fuseki

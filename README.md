@@ -19,3 +19,7 @@ The [Toltec toolchain](https://github.com/toltec-dev/toolchain) is used for the 
 9. `rustup target add --toolchain stable armv7-unknown-linux-gnueabihf`
 10. `make build deploy-demo`
      * You may need to follow the [SSH access guide](https://remarkable.guide/guide/access/ssh.html) and set `DEVICE_HOST` to something accordingly (`10.11.99.1` probably if you're connected via USB)
+
+## Icon
+
+Icon is derived from https://thenounproject.com/icon/go-181270/
