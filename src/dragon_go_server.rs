@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
+use core::fmt;
 use lazy_static::lazy_static;
-use serde::{Deserialize, Serialize};
+use serde::{de, Deserialize, Serialize};
 use std::{fs, ops::Deref, sync::Mutex, time::Instant};
 
 use gtp::controller::Engine;
@@ -42,13 +43,45 @@ lazy_static! {
     static ref LOGIN_INFO: Mutex<LoginInfo> = Mutex::new(LoginInfo::default());
 }
 
+fn dragon_date<'de, D>(deserializer: D) -> Result<DateTime<Utc>, D::Error>
+where
+    D: de::Deserializer<'de>,
+{
+    struct DragonDateStringVisitor;
+
+    impl<'de> de::Visitor<'de> for DragonDateStringVisitor {
+        type Value = DateTime<Utc>;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("a string containing a dragongoserver date")
+        }
+
+        fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            let original_date_str = v.replace("'", "") + "Z";
+
+            match chrono::DateTime::parse_from_rfc3339(&original_date_str) {
+                Ok(date) => Ok(date.to_utc()),
+                Err(_) => {
+                    panic!("bad date: '{}'", original_date_str)
+                }
+            }
+        }
+    }
+
+    deserializer.deserialize_any(DragonDateStringVisitor)
+}
+
 #[derive(Debug, Deserialize)]
 struct GameRecord {
     g: String,
     game_id: String,
     opponent_handle: String,
     player_color: String,
-    lastmove_date: String,
+    #[serde(deserialize_with = "dragon_date")]
+    lastmove_date: DateTime<Utc>,
     time_remaining: String,
     game_action: u8,
     game_status: String,
@@ -57,7 +90,8 @@ struct GameRecord {
     shape_id: u32,
     game_type: String,
     game_prio: i32,
-    opponent_lastaccess_date: String,
+    #[serde(deserialize_with = "dragon_date")]
+    opponent_lastaccess_date: DateTime<Utc>,
     handicap: u8,
 }
 
