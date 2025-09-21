@@ -126,7 +126,15 @@ fn on_multitouch_event(
     }
 }
 
-pub struct DragonGoServer {}
+pub struct DragonGoServer {
+    client: reqwest::blocking::Client
+}
+
+impl Default for DragonGoServer {
+    fn default() -> Self {
+        Self { client: reqwest::blocking::ClientBuilder::new().cookie_store(true).build().unwrap() }
+    }
+}
 
 impl Routine for DragonGoServer {
     fn init(&self, fb: &mut Framebuffer, ctrl: &mut Engine) {
@@ -154,6 +162,15 @@ impl Routine for DragonGoServer {
             info!("Dumped default login file");
         } else {
             info!("Loaded login info");
+            let login_resp = self.client.post(format!("https://www.dragongoserver.net/login.php?quick_mode=1&userid={}&passwd={}", login_info.username, login_info.password)).send().unwrap();
+            // info!("Headers: {:#?}", &login_resp.headers());
+            let login_text = login_resp.text().unwrap();            
+            if !login_text.contains("Ok") {
+                warn!("Error logging in: {}", login_text);
+            } else {                
+                let status = self.client.get(format!("https://www.dragongoserver.net/quick_status.php?user={}&version=2", login_info.username)).send().unwrap()    .text().unwrap();
+                info!("Status: {}", status);
+            }
         }
         *LOGIN_INFO.lock().expect("Can lock login_info") = login_info;
     }

@@ -46,7 +46,7 @@ fn main() {
             Mode::Chooser => Box::new(chooser::Chooser {}),
             Mode::AgainstMachine => Box::new(machine_game::MachineGame {}),
             Mode::Atari => Box::new(atari_game::AtariGame {}),
-            Mode::DragonGoServer => Box::new(dragon_go_server::DragonGoServer {}),
+            Mode::DragonGoServer => Box::new(dragon_go_server::DragonGoServer::default()),
             Mode::Exit => {
                 break;
             }
