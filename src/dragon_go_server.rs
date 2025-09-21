@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeDelta, Utc};
 use core::fmt;
 use lazy_static::lazy_static;
 use serde::{de, Deserialize, Serialize};
@@ -74,6 +74,55 @@ where
     deserializer.deserialize_any(DragonDateStringVisitor)
 }
 
+fn time_remaining<'de, D>(deserializer: D) -> Result<TimeDelta, D::Error>
+where
+    D: de::Deserializer<'de>,
+{
+    struct TimeRemainingStringVisitor;
+
+    impl<'de> de::Visitor<'de> for TimeRemainingStringVisitor {
+        type Value = TimeDelta;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("a string containing a time remaining")
+        }
+
+        fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            match v.replace("'", "").chars().next().unwrap() {
+                'F' => {
+                    // Fischer time
+                    let remaining = &v[3..v.find("(").unwrap()];
+                    let mut delta = TimeDelta::zero();
+                    for piece in remaining.split_whitespace() {
+                        let value = match i64::from_str_radix(&piece[..piece.len() - 1], 10) {
+                            Ok(v) => v,
+                            Err(_) => {
+                                panic!("Error parsing '{}' in '{}'", piece, remaining);
+                            }
+                        };
+                        delta += match &piece.chars().last().unwrap() {
+                            'd' => TimeDelta::days(value),
+                            'h' => TimeDelta::hours(value),
+                            default => {
+                                panic!("Something else! '{}'", default);
+                            }
+                        };
+                    }
+                    Ok(delta)
+                }
+                default => {
+                    panic!("Something else! '{}'", default);
+                }
+            }
+        }
+    }
+
+    deserializer.deserialize_any(TimeRemainingStringVisitor)
+}
+
 #[derive(Debug, Deserialize)]
 struct GameRecord {
     g: String,
@@ -82,7 +131,8 @@ struct GameRecord {
     player_color: String,
     #[serde(deserialize_with = "dragon_date")]
     lastmove_date: DateTime<Utc>,
-    time_remaining: String,
+    #[serde(deserialize_with = "time_remaining")]
+    time_remaining: TimeDelta,
     game_action: u8,
     game_status: String,
     move_id: u32,
