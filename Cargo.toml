@@ -6,7 +6,7 @@ license = "AGPL-3.0-or-later"
 rust-version = "1.73.0"
 
 [dependencies]
-libremarkable = {git="https://github.com/canselcik/libremarkable"}
+libremarkable = "0.7"
 env_logger = "0.11"
 log = "0.4"
 gtp = "0.1.2"
