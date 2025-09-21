@@ -20,7 +20,8 @@ pub enum Mode {
     Chooser = 1,
     AgainstMachine = 2,
     Atari = 3,
-    Exit = 4,
+    DragonGoServer = 4,
+    Exit = 5,
 }
 
 pub static CURRENT_MODE: Mutex<Mode> = Mutex::new(Mode::Chooser);
@@ -32,34 +33,46 @@ struct Button {
     mode: Mode,
 }
 
+const BUTTON_WIDTH: u32 = 700;
+const TOP_LEFT_X: i32 = ((libremarkable::dimensions::DISPLAYWIDTH as u32-BUTTON_WIDTH)/2) as i32;
+
 lazy_static! {
     static ref BUTTONS: Vec<Button> = {
         vec![
             Button {
                 text: "Machine game".to_string(),
                 top_left: Point2 {
-                    x: (SPARE_WIDTH + AVAILABLE_WIDTH / 4 - 10) as i32,
+                    x: TOP_LEFT_X,
                     y: 100,
                 },
-                size: Vector2 { x: 600, y: 95 },
+                size: Vector2 { x: BUTTON_WIDTH, y: 95 },
                 mode: Mode::AgainstMachine,
             },
             Button {
                 text: "Atari game".to_string(),
                 top_left: Point2 {
-                    x: (SPARE_WIDTH + AVAILABLE_WIDTH / 4 - 10) as i32,
+                    x: TOP_LEFT_X,
                     y: 300,
                 },
-                size: Vector2 { x: 600, y: 95 },
+                size: Vector2 { x: BUTTON_WIDTH, y: 95 },
                 mode: Mode::Atari,
+            },
+            Button {
+                text: "Dragon Go Server".to_string(),
+                top_left: Point2 {
+                    x: TOP_LEFT_X,
+                    y: 500,
+                },
+                size: Vector2 { x: BUTTON_WIDTH, y: 95 },
+                mode: Mode::DragonGoServer,
             },
             Button {
                 text: "Exit".to_string(),
                 top_left: Point2 {
-                    x: (SPARE_WIDTH + AVAILABLE_WIDTH / 4 - 10) as i32,
-                    y: 500,
+                    x: TOP_LEFT_X,
+                    y: 700,
                 },
-                size: Vector2 { x: 600, y: 95 },
+                size: Vector2 { x: BUTTON_WIDTH, y: 95 },
                 mode: Mode::Exit,
             },
         ]

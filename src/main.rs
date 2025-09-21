@@ -13,6 +13,7 @@ use crate::{
 mod atari_game;
 mod board;
 mod chooser;
+mod dragon_go_server;
 mod drawing;
 mod gtp;
 mod machine_game;
@@ -45,6 +46,7 @@ fn main() {
             Mode::Chooser => Box::new(chooser::Chooser {}),
             Mode::AgainstMachine => Box::new(machine_game::MachineGame {}),
             Mode::Atari => Box::new(atari_game::AtariGame {}),
+            Mode::DragonGoServer => Box::new(dragon_go_server::DragonGoServer {}),
             Mode::Exit => {
                 break;
             }
