@@ -34,7 +34,8 @@ struct Button {
 }
 
 const BUTTON_WIDTH: u32 = 700;
-const TOP_LEFT_X: i32 = ((libremarkable::dimensions::DISPLAYWIDTH as u32-BUTTON_WIDTH)/2) as i32;
+const TOP_LEFT_X: i32 =
+    ((libremarkable::dimensions::DISPLAYWIDTH as u32 - BUTTON_WIDTH) / 2) as i32;
 
 lazy_static! {
     static ref BUTTONS: Vec<Button> = {
@@ -45,7 +46,10 @@ lazy_static! {
                     x: TOP_LEFT_X,
                     y: 100,
                 },
-                size: Vector2 { x: BUTTON_WIDTH, y: 95 },
+                size: Vector2 {
+                    x: BUTTON_WIDTH,
+                    y: 95,
+                },
                 mode: Mode::AgainstMachine,
             },
             Button {
@@ -54,7 +58,10 @@ lazy_static! {
                     x: TOP_LEFT_X,
                     y: 300,
                 },
-                size: Vector2 { x: BUTTON_WIDTH, y: 95 },
+                size: Vector2 {
+                    x: BUTTON_WIDTH,
+                    y: 95,
+                },
                 mode: Mode::Atari,
             },
             Button {
@@ -63,7 +70,10 @@ lazy_static! {
                     x: TOP_LEFT_X,
                     y: 500,
                 },
-                size: Vector2 { x: BUTTON_WIDTH, y: 95 },
+                size: Vector2 {
+                    x: BUTTON_WIDTH,
+                    y: 95,
+                },
                 mode: Mode::DragonGoServer,
             },
             Button {
@@ -72,7 +82,10 @@ lazy_static! {
                     x: TOP_LEFT_X,
                     y: 700,
                 },
-                size: Vector2 { x: BUTTON_WIDTH, y: 95 },
+                size: Vector2 {
+                    x: BUTTON_WIDTH,
+                    y: 95,
+                },
                 mode: Mode::Exit,
             },
         ]

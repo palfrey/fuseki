@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use std::{fs, ops::Deref, sync::Mutex, time::Instant};
@@ -39,6 +40,25 @@ struct LoginInfo {
 
 lazy_static! {
     static ref LOGIN_INFO: Mutex<LoginInfo> = Mutex::new(LoginInfo::default());
+}
+
+#[derive(Debug, Deserialize)]
+struct GameRecord {
+    g: String,
+    game_id: String,
+    opponent_handle: String,
+    player_color: String,
+    lastmove_date: String,
+    time_remaining: String,
+    game_action: u8,
+    game_status: String,
+    move_id: u32,
+    tournament_id: u32,
+    shape_id: u32,
+    game_type: String,
+    game_prio: i32,
+    opponent_lastaccess_date: String,
+    handicap: u8,
 }
 
 fn draw_status(fb: &mut Framebuffer, text: &str, refresh: bool) {
@@ -127,12 +147,17 @@ fn on_multitouch_event(
 }
 
 pub struct DragonGoServer {
-    client: reqwest::blocking::Client
+    client: reqwest::blocking::Client,
 }
 
 impl Default for DragonGoServer {
     fn default() -> Self {
-        Self { client: reqwest::blocking::ClientBuilder::new().cookie_store(true).build().unwrap() }
+        Self {
+            client: reqwest::blocking::ClientBuilder::new()
+                .cookie_store(true)
+                .build()
+                .unwrap(),
+        }
     }
 }
 
@@ -162,14 +187,44 @@ impl Routine for DragonGoServer {
             info!("Dumped default login file");
         } else {
             info!("Loaded login info");
-            let login_resp = self.client.post(format!("https://www.dragongoserver.net/login.php?quick_mode=1&userid={}&passwd={}", login_info.username, login_info.password)).send().unwrap();
+            let login_resp = self
+                .client
+                .post(format!(
+                    "https://www.dragongoserver.net/login.php?quick_mode=1&userid={}&passwd={}",
+                    login_info.username, login_info.password
+                ))
+                .send()
+                .unwrap();
             // info!("Headers: {:#?}", &login_resp.headers());
-            let login_text = login_resp.text().unwrap();            
+            let login_text = login_resp.text().unwrap();
             if !login_text.contains("Ok") {
                 warn!("Error logging in: {}", login_text);
-            } else {                
-                let status = self.client.get(format!("https://www.dragongoserver.net/quick_status.php?user={}&version=2", login_info.username)).send().unwrap()    .text().unwrap();
+            } else {
+                let status = self
+                    .client
+                    .get(format!(
+                        "https://www.dragongoserver.net/quick_status.php?user={}&version=2",
+                        login_info.username
+                    ))
+                    .send()
+                    .unwrap()
+                    .text()
+                    .unwrap();
                 info!("Status: {}", status);
+                for record_raw_res in csv::ReaderBuilder::new()
+                    .has_headers(false)
+                    .flexible(true)
+                    .from_reader(status.as_bytes())
+                    .records()
+                {
+                    info!("Record raw: {:#?}", record_raw_res);
+                    let record_raw = record_raw_res.unwrap();
+                    if !record_raw.get(0).unwrap().starts_with("G") {
+                        continue;
+                    }
+                    let record: GameRecord = record_raw.deserialize(None).unwrap();
+                    info!("Game: {:#?}", record);
+                }
             }
         }
         *LOGIN_INFO.lock().expect("Can lock login_info") = login_info;
