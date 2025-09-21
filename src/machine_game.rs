@@ -152,7 +152,7 @@ fn on_multitouch_event(
 pub struct MachineGame {}
 
 impl Routine for MachineGame {
-    fn init(&self, fb: &mut Framebuffer, ctrl: &mut Engine) {
+    fn init(&mut self, fb: &mut Framebuffer, ctrl: &mut Engine) {
         reset_machine_game(ctrl, fb);
         set_turn(Turn::HumanTurn, fb);
     }

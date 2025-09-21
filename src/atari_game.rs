@@ -210,7 +210,7 @@ fn on_multitouch_event(
 pub struct AtariGame {}
 
 impl Routine for AtariGame {
-    fn init(&self, fb: &mut Framebuffer, ctrl: &mut Engine) {
+    fn init(&mut self, fb: &mut Framebuffer, ctrl: &mut Engine) {
         set_turn(Turn::BlackTurn, fb);
         reset_atari_game(ctrl, fb);
     }

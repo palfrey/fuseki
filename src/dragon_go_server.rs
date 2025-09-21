@@ -1,10 +1,7 @@
 use chrono::{DateTime, TimeDelta, Utc};
 use core::fmt;
+use gtp::{controller::Engine, Color, Entity};
 use lazy_static::lazy_static;
-use serde::{de, Deserialize, Serialize};
-use std::{fs, ops::Deref, sync::Mutex, time::Instant};
-
-use gtp::controller::Engine;
 use libremarkable::{
     appctx,
     cgmath::{Point2, Vector2},
@@ -16,6 +13,12 @@ use libremarkable::{
     input::MultitouchEvent,
 };
 use log::{info, warn};
+use serde::{de, Deserialize, Serialize};
+use sgf_parse::{
+    go::{parse, Move, Prop},
+    SgfNode,
+};
+use std::{fs, ops::Deref, sync::Mutex, time::Instant};
 
 use crate::{
     board::{
@@ -126,7 +129,7 @@ where
 #[derive(Debug, Deserialize)]
 struct GameRecord {
     g: String,
-    game_id: String,
+    game_id: u32,
     opponent_handle: String,
     player_color: String,
     #[serde(deserialize_with = "dragon_date")]
@@ -183,17 +186,6 @@ fn draw_status(fb: &mut Framebuffer, text: &str, refresh: bool) {
     }
 }
 
-fn redraw_stones(ctrl: &mut Engine, fb: &mut Framebuffer) {
-    let start = Instant::now();
-    // let white_stones = list_stones(ctrl, "white");
-    // let black_stones = list_stones(ctrl, "black");
-    // draw_board(fb, white_stones, black_stones);
-    draw_reset(fb);
-    refresh(fb);
-    let elapsed = start.elapsed();
-    info!("redraw elapsed: {:.2?}", elapsed);
-}
-
 fn on_multitouch_event(
     ctx: &mut appctx::ApplicationContext<'_>,
     event: MultitouchEvent,
@@ -232,11 +224,26 @@ fn on_multitouch_event(
 
 pub struct DragonGoServer {
     client: reqwest::blocking::Client,
+    white_stones: Vec<Entity>,
+    black_stones: Vec<Entity>,
+}
+
+impl DragonGoServer {
+    fn redraw_stones(self, ctrl: &mut Engine, fb: &mut Framebuffer) {
+        let start = Instant::now();
+        draw_board(fb, self.white_stones, self.black_stones);
+        draw_reset(fb);
+        refresh(fb);
+        let elapsed = start.elapsed();
+        info!("redraw elapsed: {:.2?}", elapsed);
+    }
 }
 
 impl Default for DragonGoServer {
     fn default() -> Self {
         Self {
+            white_stones: vec![],
+            black_stones: vec![],
             client: reqwest::blocking::ClientBuilder::new()
                 .cookie_store(true)
                 .build()
@@ -245,8 +252,27 @@ impl Default for DragonGoServer {
     }
 }
 
+fn get_sgf_properties_for_node(node: &SgfNode<Prop>) -> Vec<Prop> {
+    let mut output = vec![];
+    for prop in node.properties() {
+        output.push(prop.clone());
+    }
+    for child in node.children() {
+        output.append(&mut get_sgf_properties_for_node(child));
+    }
+    output
+}
+
+fn get_sgf_properties(raw_sgf: &str) -> Vec<Prop> {
+    let mut output = vec![];
+    for node in parse(&raw_sgf).unwrap() {
+        output.append(&mut get_sgf_properties_for_node(&node));
+    }
+    output
+}
+
 impl Routine for DragonGoServer {
-    fn init(&self, fb: &mut Framebuffer, ctrl: &mut Engine) {
+    fn init(&mut self, fb: &mut Framebuffer, ctrl: &mut Engine) {
         let current_login_file = LOGIN_FILE.lock().expect("get login_file");
         let login_raw = fs::read(current_login_file.deref());
         let login_info: LoginInfo = match login_raw {
@@ -294,20 +320,65 @@ impl Routine for DragonGoServer {
                     .unwrap()
                     .text()
                     .unwrap();
-                info!("Status: {}", status);
+                let mut first_expiring_game: Option<GameRecord> = None;
+                // info!("Status: {}", status);
                 for record_raw_res in csv::ReaderBuilder::new()
                     .has_headers(false)
                     .flexible(true)
                     .from_reader(status.as_bytes())
                     .records()
                 {
-                    info!("Record raw: {:#?}", record_raw_res);
+                    // info!("Record raw: {:#?}", record_raw_res);
                     let record_raw = record_raw_res.unwrap();
                     if !record_raw.get(0).unwrap().starts_with("G") {
                         continue;
                     }
                     let record: GameRecord = record_raw.deserialize(None).unwrap();
                     info!("Game: {:#?}", record);
+                    if first_expiring_game
+                        .as_ref()
+                        .and_then(|g| Some(g.time_remaining > record.time_remaining))
+                        .unwrap_or(true)
+                    {
+                        first_expiring_game.replace(record);
+                    }
+                }
+
+                if let Some(game) = first_expiring_game {
+                    let raw_sgf = self
+                    .client
+                    .get(format!(
+                        "https://www.dragongoserver.net/sgf.php?gid={}&owned_comments=N&quick_mode=0&no_cache=0",
+                        game.game_id
+                    ))
+                    .send()
+                    .unwrap()
+                    .text()
+                    .unwrap();
+                    let props = get_sgf_properties(&raw_sgf);
+                    for prop in props {
+                        match prop {
+                            Prop::W(white_move) => {
+                                if let Move::Move(point) = white_move {
+                                    self.white_stones.push(Entity::Move((
+                                        Color::W,
+                                        (point.x as i32, point.y as i32),
+                                    )))
+                                }
+                            }
+                            Prop::AB(black_moves) => {
+                                for point in black_moves {
+                                    self.black_stones.push(Entity::Move((
+                                            Color::B,
+                                            (point.x as i32, point.y as i32),
+                                        )))
+                                    }
+                            }
+                            other => {
+                                info!("Other prop: {other}")
+                            }
+                        }
+                    }
                 }
             }
         }

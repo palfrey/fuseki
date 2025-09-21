@@ -122,7 +122,7 @@ fn on_multitouch_event(ctx: &mut appctx::ApplicationContext<'_>, event: Multitou
 pub struct Chooser {}
 
 impl Routine for Chooser {
-    fn init(&self, fb: &mut Framebuffer, _ctrl: &mut Engine) {
+    fn init(&mut self, fb: &mut Framebuffer, _ctrl: &mut Engine) {
         draw_chooser(fb);
     }
 

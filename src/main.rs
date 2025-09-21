@@ -42,7 +42,7 @@ fn main() {
     loop {
         info!("Starting mode loop");
         let current_mode = *CURRENT_MODE.lock().expect("Working lock");
-        let current_routine: Box<dyn Routine> = match current_mode {
+        let mut current_routine: Box<dyn Routine> = match current_mode {
             Mode::Chooser => Box::new(chooser::Chooser {}),
             Mode::AgainstMachine => Box::new(machine_game::MachineGame {}),
             Mode::Atari => Box::new(atari_game::AtariGame {}),

@@ -449,6 +449,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "sgf-parse",
 ]
 
 [[package]]
@@ -1535,6 +1536,12 @@ dependencies = [
  "ryu",
  "serde",
 ]
+
+[[package]]
+name = "sgf-parse"
+version = "4.2.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4475df1c12a749e7056f5e1c337d070fea81976722859f480c02af12e6394eb7"
 
 [[package]]
 name = "shlex"
