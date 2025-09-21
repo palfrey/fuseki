@@ -31,10 +31,10 @@ lazy_static! {
     static ref LOGIN_FILE: Mutex<String> = Mutex::new(DEFAULT_LOGIN_FILE.to_string());
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize, Default, PartialEq)]
 struct LoginInfo {
-    username: Option<String>,
-    password: Option<String>,
+    username: String,
+    password: String,
 }
 
 lazy_static! {
@@ -148,6 +148,13 @@ impl Routine for DragonGoServer {
                 LoginInfo::default()
             }
         };
+        if login_info == LoginInfo::default() {
+            let dumped = serde_json::to_vec_pretty(&login_info).expect("can dump login info");
+            fs::write(current_login_file.deref(), dumped).expect("Can write login info");
+            info!("Dumped default login file");
+        } else {
+            info!("Loaded login info");
+        }
         *LOGIN_INFO.lock().expect("Can lock login_info") = login_info;
     }
 
