@@ -3,7 +3,7 @@ use crate::{
     chooser::CURRENT_MODE,
     drawing::{draw_text, refresh, refresh_with_options},
     gtp::{clear_board, count_captures, do_human_move, list_stones, set_board_size, undo_move},
-    reset::{draw_reset, reset_button_top_left},
+    reset::{draw_reset, reset_button_top_left, RESET_BUTTON_SIZE},
     routine::Routine,
 };
 use gtp::controller::Engine;
@@ -152,9 +152,9 @@ impl Routine for AtariGame {
 
                 let rbtl = reset_button_top_left(&self.board);
                 if (finger.pos.x as i32) >= rbtl.x
-                    && (finger.pos.x as i32) < (rbtl.x + rbtl.x as i32)
+                    && (finger.pos.x as i32) < (rbtl.x + RESET_BUTTON_SIZE.x as i32)
                     && (finger.pos.y as i32) >= rbtl.y
-                    && (finger.pos.y as i32) < (rbtl.y + rbtl.y as i32)
+                    && (finger.pos.y as i32) < (rbtl.y + RESET_BUTTON_SIZE.y as i32)
                 {
                     *CURRENT_MODE.lock().unwrap() = crate::chooser::Mode::Chooser;
                     ctx.stop();

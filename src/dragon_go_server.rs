@@ -2,7 +2,7 @@ use crate::{
     board::Board,
     chooser::CURRENT_MODE,
     drawing::refresh,
-    reset::{draw_reset, reset_button_top_left},
+    reset::{draw_reset, reset_button_top_left, RESET_BUTTON_SIZE},
     routine::Routine,
 };
 use chrono::{DateTime, TimeDelta, Utc};
@@ -357,10 +357,11 @@ impl Routine for DragonGoServer {
 
                 if let Some(ref board) = self.board {
                     let rbtl = reset_button_top_left(board);
+                    info!("rbtl: {rbtl:?}");
                     if (finger.pos.x as i32) >= rbtl.x
-                        && (finger.pos.x as i32) < (rbtl.x + rbtl.x as i32)
+                        && (finger.pos.x as i32) < (rbtl.x + RESET_BUTTON_SIZE.x as i32)
                         && (finger.pos.y as i32) >= rbtl.y
-                        && (finger.pos.y as i32) < (rbtl.y + rbtl.y as i32)
+                        && (finger.pos.y as i32) < (rbtl.y + RESET_BUTTON_SIZE.y as i32)
                     {
                         *CURRENT_MODE.lock().unwrap() = crate::chooser::Mode::Chooser;
                         ctx.stop();
@@ -368,11 +369,11 @@ impl Routine for DragonGoServer {
                     }
 
                     let point = board.nearest_spot(finger.pos.x, finger.pos.y);
-                    let pos = finger.pos;
                     if point.x >= board.board_size || point.y >= board.board_size {
-                        info!("Bad point {point:?}");
+                        info!("Bad point {point:?} from {:?}", finger.pos);
                         return;
                     }
+                    let pos = finger.pos;
                     info!("Drawing: {point:?} for {pos:?}");
                     board.refresh_and_draw_one_piece(fb, point.x, point.y, true);
                 }
