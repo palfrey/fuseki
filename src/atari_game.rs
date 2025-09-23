@@ -1,7 +1,7 @@
 use crate::{
     board::{Board, AVAILABLE_WIDTH},
     chooser::CURRENT_MODE,
-    drawing::{draw_text, refresh, refresh_with_options},
+    drawing::{draw_button, refresh, refresh_with_options},
     gtp::{clear_board, count_captures, do_human_move, list_stones, set_board_size, undo_move},
     reset::{draw_reset, reset_button_top_left, RESET_BUTTON_SIZE},
     routine::Routine,
@@ -90,7 +90,7 @@ impl AtariGame {
             false,
         );
 
-        draw_text(fb, "Undo", self.undo_button_top_left, UNDO_BUTTON_SIZE);
+        draw_button(fb, "Undo", self.undo_button_top_left, UNDO_BUTTON_SIZE);
 
         if refresh {
             refresh_with_options(

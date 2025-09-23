@@ -10,7 +10,7 @@ use libremarkable::{
 };
 
 use crate::{
-    drawing::{draw_text, refresh},
+    drawing::{draw_button, refresh},
     routine::Routine,
 };
 
@@ -94,7 +94,7 @@ lazy_static! {
 fn draw_chooser(fb: &mut Framebuffer) {
     fb.clear();
     for button in BUTTONS.iter() {
-        draw_text(fb, &button.text, button.top_left, button.size);
+        draw_button(fb, &button.text, button.top_left, button.size);
     }
     refresh(fb);
 }

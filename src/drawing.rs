@@ -33,7 +33,7 @@ pub fn refresh(fb: &mut Framebuffer) {
     );
 }
 
-pub fn draw_text(fb: &mut Framebuffer, text: &str, top_left: Point2<i32>, size: Vector2<u32>) {
+pub fn draw_button(fb: &mut Framebuffer, text: &str, top_left: Point2<i32>, size: Vector2<u32>) {
     fb.draw_rect(top_left, size, 5, color::BLACK);
     fb.draw_text(
         Point2 {

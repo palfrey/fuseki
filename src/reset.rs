@@ -5,7 +5,7 @@ use libremarkable::{
 
 use crate::{
     board::{Board, AVAILABLE_WIDTH},
-    drawing::draw_text,
+    drawing::draw_button,
 };
 
 pub const RESET_BUTTON_SIZE: Vector2<u32> = Vector2 { x: 500, y: 95 };
@@ -18,7 +18,7 @@ pub fn reset_button_top_left(board: &Board) -> Point2<i32> {
 }
 
 pub fn draw_reset(board: &Board, fb: &mut Framebuffer) {
-    draw_text(
+    draw_button(
         fb,
         "Exit game",
         reset_button_top_left(board),
