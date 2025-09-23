@@ -1,17 +1,15 @@
+use crate::{
+    board::Board,
+    chooser::CURRENT_MODE,
+    drawing::refresh,
+    reset::{draw_reset, reset_button_top_left},
+    routine::Routine,
+};
 use chrono::{DateTime, TimeDelta, Utc};
 use core::fmt;
-use gtp::{controller::Engine, Color, Entity};
+use gtp::{controller::Engine, Entity};
 use lazy_static::lazy_static;
-use libremarkable::{
-    appctx,
-    cgmath::{Point2, Vector2},
-    framebuffer::{
-        common::{color, mxcfb_rect, waveform_mode},
-        core::Framebuffer,
-        FramebufferDraw,
-    },
-    input::MultitouchEvent,
-};
+use libremarkable::{appctx, framebuffer::core::Framebuffer, input::MultitouchEvent};
 use log::{info, warn};
 use serde::{de, Deserialize, Serialize};
 use sgf_parse::{
@@ -20,18 +18,7 @@ use sgf_parse::{
 };
 use std::{fs, ops::Deref, sync::Mutex, time::Instant};
 
-use crate::{
-    board::{
-        draw_board, nearest_spot, refresh_and_draw_one_piece, AVAILABLE_WIDTH, BOARD_SIZE,
-        SPARE_WIDTH,
-    },
-    chooser::CURRENT_MODE,
-    drawing::{draw_text, refresh, refresh_with_options},
-    reset::{draw_reset, RESET_BUTTON_SIZE, RESET_BUTTON_TOP_LEFT},
-    routine::Routine,
-};
-
-const DEFAULT_LOGIN_FILE: &str = "/tmp/dragon-go-server-login";
+const DEFAULT_LOGIN_FILE: &str = "/opt/dragon-go-server-login";
 lazy_static! {
     static ref LOGIN_FILE: Mutex<String> = Mutex::new(DEFAULT_LOGIN_FILE.to_string());
 }
@@ -148,91 +135,58 @@ struct GameRecord {
     handicap: u8,
 }
 
-fn draw_status(fb: &mut Framebuffer, text: &str, refresh: bool) {
-    let rect_width = 550;
-    fb.fill_rect(
-        Point2 {
-            x: SPARE_WIDTH as i32,
-            y: 0,
-        },
-        Vector2 {
-            x: rect_width,
-            y: 100,
-        },
-        color::WHITE,
-    );
-    fb.draw_text(
-        Point2 {
-            x: SPARE_WIDTH as f32,
-            y: 100.0,
-        },
-        text,
-        100.0,
-        color::BLACK,
-        false,
-    );
+// fn draw_status(fb: &mut Framebuffer, text: &str, refresh: bool) {
+//     let rect_width = 550;
+//     fb.fill_rect(
+//         Point2 {
+//             x: SPARE_WIDTH as i32,
+//             y: 0,
+//         },
+//         Vector2 {
+//             x: rect_width,
+//             y: 100,
+//         },
+//         color::WHITE,
+//     );
+//     fb.draw_text(
+//         Point2 {
+//             x: SPARE_WIDTH as f32,
+//             y: 100.0,
+//         },
+//         text,
+//         100.0,
+//         color::BLACK,
+//         false,
+//     );
 
-    if refresh {
-        refresh_with_options(
-            fb,
-            &mxcfb_rect {
-                top: 0,
-                left: SPARE_WIDTH as u32,
-                width: rect_width,
-                height: 100,
-            },
-            waveform_mode::WAVEFORM_MODE_AUTO,
-        );
-    }
-}
-
-fn on_multitouch_event(
-    ctx: &mut appctx::ApplicationContext<'_>,
-    event: MultitouchEvent,
-    ctrl: &mut Engine,
-) {
-    match event {
-        MultitouchEvent::Press { finger } => {
-            let start = Instant::now();
-            let fb = ctx.get_framebuffer_ref();
-
-            if (finger.pos.x as i32) >= RESET_BUTTON_TOP_LEFT.x
-                && (finger.pos.x as i32) < (RESET_BUTTON_TOP_LEFT.x + RESET_BUTTON_SIZE.x as i32)
-                && (finger.pos.y as i32) >= RESET_BUTTON_TOP_LEFT.y
-                && (finger.pos.y as i32) < (RESET_BUTTON_TOP_LEFT.y + RESET_BUTTON_SIZE.y as i32)
-            {
-                *CURRENT_MODE.lock().unwrap() = crate::chooser::Mode::Chooser;
-                ctx.stop();
-                return;
-            }
-
-            let point = nearest_spot(finger.pos.x, finger.pos.y);
-            let pos = finger.pos;
-            if point.x >= BOARD_SIZE || point.y >= BOARD_SIZE {
-                info!("Bad point {point:?}");
-                return;
-            }
-            info!("Drawing: {point:?} for {pos:?}");
-            refresh_and_draw_one_piece(fb, point.x, point.y, true);
-
-            let elapsed = start.elapsed();
-            info!("touch elapsed: {:.2?}", elapsed);
-        }
-        _ => {}
-    }
-}
+//     if refresh {
+//         refresh_with_options(
+//             fb,
+//             &mxcfb_rect {
+//                 top: 0,
+//                 left: SPARE_WIDTH as u32,
+//                 width: rect_width,
+//                 height: 100,
+//             },
+//             waveform_mode::WAVEFORM_MODE_AUTO,
+//         );
+//     }
+// }
 
 pub struct DragonGoServer {
     client: reqwest::blocking::Client,
     white_stones: Vec<Entity>,
     black_stones: Vec<Entity>,
+    board: Option<Board>,
 }
 
 impl DragonGoServer {
-    fn redraw_stones(self, ctrl: &mut Engine, fb: &mut Framebuffer) {
+    fn redraw_stones(&self, fb: &mut Framebuffer) {
         let start = Instant::now();
-        draw_board(fb, self.white_stones, self.black_stones);
-        draw_reset(fb);
+        if let Some(ref board) = self.board {
+            board.draw_board(fb, &self.white_stones, &self.black_stones);
+            draw_reset(board, fb);
+        }
         refresh(fb);
         let elapsed = start.elapsed();
         info!("redraw elapsed: {:.2?}", elapsed);
@@ -248,6 +202,7 @@ impl Default for DragonGoServer {
                 .cookie_store(true)
                 .build()
                 .unwrap(),
+            board: None,
         }
     }
 }
@@ -272,7 +227,7 @@ fn get_sgf_properties(raw_sgf: &str) -> Vec<Prop> {
 }
 
 impl Routine for DragonGoServer {
-    fn init(&mut self, fb: &mut Framebuffer, ctrl: &mut Engine) {
+    fn init(&mut self, fb: &mut Framebuffer, _ctrl: &mut Engine) {
         let current_login_file = LOGIN_FILE.lock().expect("get login_file");
         let login_raw = fs::read(current_login_file.deref());
         let login_info: LoginInfo = match login_raw {
@@ -360,19 +315,22 @@ impl Routine for DragonGoServer {
                         match prop {
                             Prop::W(white_move) => {
                                 if let Move::Move(point) = white_move {
-                                    self.white_stones.push(Entity::Move((
-                                        Color::W,
-                                        (point.x as i32, point.y as i32),
+                                    self.white_stones.push(Entity::Vertex((
+                                        (point.x + 1) as i32,
+                                        (point.y + 1) as i32,
                                     )))
                                 }
                             }
                             Prop::AB(black_moves) => {
                                 for point in black_moves {
-                                    self.black_stones.push(Entity::Move((
-                                            Color::B,
-                                            (point.x as i32, point.y as i32),
-                                        )))
-                                    }
+                                    self.black_stones.push(Entity::Vertex((
+                                        (point.x + 1) as i32,
+                                        (point.y + 1) as i32,
+                                    )))
+                                }
+                            }
+                            Prop::SZ(size) => {
+                                self.board = Some(Board::new(size.0));
                             }
                             other => {
                                 info!("Other prop: {other}")
@@ -383,14 +341,46 @@ impl Routine for DragonGoServer {
             }
         }
         *LOGIN_INFO.lock().expect("Can lock login_info") = login_info;
+        self.redraw_stones(fb);
     }
 
     fn on_multitouch_event(
-        &self,
+        &mut self,
         ctx: &mut appctx::ApplicationContext<'_>,
         event: MultitouchEvent,
-        ctrl: &mut Engine,
+        _ctrl: &mut Engine,
     ) {
-        on_multitouch_event(ctx, event, ctrl);
+        match event {
+            MultitouchEvent::Press { finger } => {
+                let start = Instant::now();
+                let fb = ctx.get_framebuffer_ref();
+
+                if let Some(ref board) = self.board {
+                    let rbtl = reset_button_top_left(board);
+                    if (finger.pos.x as i32) >= rbtl.x
+                        && (finger.pos.x as i32) < (rbtl.x + rbtl.x as i32)
+                        && (finger.pos.y as i32) >= rbtl.y
+                        && (finger.pos.y as i32) < (rbtl.y + rbtl.y as i32)
+                    {
+                        *CURRENT_MODE.lock().unwrap() = crate::chooser::Mode::Chooser;
+                        ctx.stop();
+                        return;
+                    }
+
+                    let point = board.nearest_spot(finger.pos.x, finger.pos.y);
+                    let pos = finger.pos;
+                    if point.x >= board.board_size || point.y >= board.board_size {
+                        info!("Bad point {point:?}");
+                        return;
+                    }
+                    info!("Drawing: {point:?} for {pos:?}");
+                    board.refresh_and_draw_one_piece(fb, point.x, point.y, true);
+                }
+
+                let elapsed = start.elapsed();
+                info!("touch elapsed: {:.2?}", elapsed);
+            }
+            _ => {}
+        }
     }
 }

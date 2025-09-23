@@ -10,7 +10,6 @@ use libremarkable::{
 };
 
 use crate::{
-    board::{AVAILABLE_WIDTH, SPARE_WIDTH},
     drawing::{draw_text, refresh},
     routine::Routine,
 };
@@ -127,7 +126,7 @@ impl Routine for Chooser {
     }
 
     fn on_multitouch_event(
-        &self,
+        &mut self,
         ctx: &mut appctx::ApplicationContext<'_>,
         event: MultitouchEvent,
         _ctrl: &mut Engine,

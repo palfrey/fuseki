@@ -4,7 +4,7 @@ use libremarkable::{appctx, framebuffer::core::Framebuffer, input::MultitouchEve
 pub trait Routine {
     fn init(&mut self, fb: &mut Framebuffer, ctrl: &mut Engine);
     fn on_multitouch_event(
-        &self,
+        &mut self,
         ctx: &mut appctx::ApplicationContext<'_>,
         event: MultitouchEvent,
         ctrl: &mut Engine,

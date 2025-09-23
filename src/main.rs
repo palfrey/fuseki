@@ -1,11 +1,8 @@
-use std::time::Duration;
-
-use ::gtp::{controller::Engine, Command};
+use ::gtp::controller::Engine;
 use libremarkable::{appctx, input::InputEvent};
 use log::info;
 
 use crate::{
-    board::BOARD_SIZE,
     chooser::{Mode, CURRENT_MODE},
     routine::Routine,
 };
@@ -30,11 +27,6 @@ fn main() {
     let gnugo_path = std::env::var("GNUGO_BINARY").unwrap_or("/home/root/gnugo".into());
     let mut ctrl = Engine::new(&gnugo_path, &["--mode", "gtp", "--level", "8"]);
     ctrl.start().expect("Failure to launch gnugo");
-
-    ctrl.send(Command::new_with_args("boardsize", |e| {
-        e.i(BOARD_SIZE as u32)
-    }));
-    ctrl.wait_response(Duration::from_millis(500)).unwrap();
     info!("Init complete. Beginning event dispatch...");
 
     let mut previous_mode: Option<Mode> = None;
@@ -44,8 +36,8 @@ fn main() {
         let current_mode = *CURRENT_MODE.lock().expect("Working lock");
         let mut current_routine: Box<dyn Routine> = match current_mode {
             Mode::Chooser => Box::new(chooser::Chooser {}),
-            Mode::AgainstMachine => Box::new(machine_game::MachineGame {}),
-            Mode::Atari => Box::new(atari_game::AtariGame {}),
+            Mode::AgainstMachine => Box::new(machine_game::MachineGame::new()),
+            Mode::Atari => Box::new(atari_game::AtariGame::new()),
             Mode::DragonGoServer => Box::new(dragon_go_server::DragonGoServer::default()),
             Mode::Exit => {
                 break;

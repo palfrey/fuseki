@@ -1,5 +1,11 @@
-use std::{sync::Mutex, time::Instant};
-
+use crate::{
+    board::Board,
+    chooser::CURRENT_MODE,
+    drawing::{refresh, refresh_with_options},
+    gtp::{clear_board, do_human_move, get_response, list_stones, set_board_size},
+    reset::{draw_reset, reset_button_top_left},
+    routine::Routine,
+};
 use gtp::{controller::Engine, Command};
 use libremarkable::{
     appctx,
@@ -12,28 +18,12 @@ use libremarkable::{
     input::MultitouchEvent,
 };
 use log::info;
-
-use crate::{
-    board::{draw_board, nearest_spot, BOARD_SIZE, SPARE_WIDTH},
-    chooser::CURRENT_MODE,
-    drawing::{refresh, refresh_with_options},
-    gtp::{clear_board, do_human_move, get_response, list_stones},
-    reset::{draw_reset, RESET_BUTTON_SIZE, RESET_BUTTON_TOP_LEFT},
-    routine::Routine,
-};
+use std::time::Instant;
 
 #[derive(PartialEq, Debug, Clone, Copy)]
 enum Turn {
     HumanTurn = 1,
     MachineTurn = 2,
-}
-
-static CURRENT_TURN: Mutex<Turn> = Mutex::new(Turn::MachineTurn);
-
-fn set_turn(turn: Turn, fb: &mut Framebuffer) {
-    info!("Set turn {turn:?}");
-    *CURRENT_TURN.lock().unwrap() = turn;
-    draw_turn(fb, true);
 }
 
 fn do_machine_move(ctrl: &mut Engine) {
@@ -43,126 +33,137 @@ fn do_machine_move(ctrl: &mut Engine) {
     info!("machine: {}", resp.text());
 }
 
-fn draw_turn(fb: &mut Framebuffer, refresh: bool) {
-    let rect_width = 550;
-    let turn: Turn = *CURRENT_TURN.lock().unwrap();
-    info!("draw_turn {turn:?}");
-    let text = if turn == Turn::HumanTurn {
-        "Human turn"
-    } else {
-        "Machine turn"
-    };
-    fb.fill_rect(
-        Point2 {
-            x: SPARE_WIDTH as i32,
-            y: 0,
-        },
-        Vector2 {
-            x: rect_width,
-            y: 100,
-        },
-        color::WHITE,
-    );
-    fb.draw_text(
-        Point2 {
-            x: SPARE_WIDTH as f32,
-            y: 100.0,
-        },
-        text,
-        100.0,
-        color::BLACK,
-        false,
-    );
-    if refresh {
-        refresh_with_options(
-            fb,
-            &mxcfb_rect {
-                top: 0,
-                left: SPARE_WIDTH as u32,
-                width: rect_width,
-                height: 100,
-            },
-            waveform_mode::WAVEFORM_MODE_AUTO,
-        );
-    }
+pub struct MachineGame {
+    board: Board,
+    current_turn: Turn,
 }
 
-fn reset_machine_game(ctrl: &mut Engine, fb: &mut Framebuffer) {
-    clear_board(ctrl);
-    do_machine_move(ctrl);
-    redraw_stones(ctrl, fb);
-}
-
-fn redraw_stones(ctrl: &mut Engine, fb: &mut Framebuffer) {
-    let start = Instant::now();
-    let white_stones = list_stones(ctrl, "white");
-    let black_stones = list_stones(ctrl, "black");
-    draw_board(fb, white_stones, black_stones);
-    draw_turn(fb, false);
-    draw_reset(fb);
-    refresh(fb);
-    let elapsed = start.elapsed();
-    info!("redraw elapsed: {:.2?}", elapsed);
-}
-
-fn on_multitouch_event(
-    ctx: &mut appctx::ApplicationContext<'_>,
-    event: MultitouchEvent,
-    ctrl: &mut Engine,
-) {
-    match event {
-        MultitouchEvent::Press { finger } => {
-            if *CURRENT_TURN.lock().unwrap() != Turn::HumanTurn {
-                info!("Ignoring touch, as machine turn");
-                return;
-            }
-            let fb = ctx.get_framebuffer_ref();
-
-            if (finger.pos.x as i32) >= RESET_BUTTON_TOP_LEFT.x
-                && (finger.pos.x as i32) < (RESET_BUTTON_TOP_LEFT.x + RESET_BUTTON_SIZE.x as i32)
-                && (finger.pos.y as i32) >= RESET_BUTTON_TOP_LEFT.y
-                && (finger.pos.y as i32) < (RESET_BUTTON_TOP_LEFT.y + RESET_BUTTON_SIZE.y as i32)
-            {
-                *CURRENT_MODE.lock().unwrap() = crate::chooser::Mode::Chooser;
-                ctx.stop();
-                return;
-            }
-
-            let point = nearest_spot(finger.pos.x, finger.pos.y);
-            let pos = finger.pos;
-            if point.x >= BOARD_SIZE || point.y >= BOARD_SIZE {
-                info!("Bad point {point:?}");
-                return;
-            }
-            info!("Drawing: {point:?} for {pos:?}");
-            if !do_human_move(ctrl, point, "white") {
-                info!("Bad human move");
-                return;
-            }
-            set_turn(Turn::MachineTurn, fb);
-            redraw_stones(ctrl, fb);
-            do_machine_move(ctrl);
-            redraw_stones(ctrl, fb);
-            set_turn(Turn::HumanTurn, fb);
+impl MachineGame {
+    pub fn new() -> MachineGame {
+        MachineGame {
+            board: Board::new(9),
+            current_turn: Turn::MachineTurn,
         }
-        _ => {}
+    }
+
+    fn draw_turn(&self, fb: &mut Framebuffer, refresh: bool) {
+        let rect_width = 550;
+        info!("draw_turn {:?}", self.current_turn);
+        let text = if self.current_turn == Turn::HumanTurn {
+            "Human turn"
+        } else {
+            "Machine turn"
+        };
+        fb.fill_rect(
+            Point2 {
+                x: self.board.spare_width as i32,
+                y: 0,
+            },
+            Vector2 {
+                x: rect_width,
+                y: 100,
+            },
+            color::WHITE,
+        );
+        fb.draw_text(
+            Point2 {
+                x: self.board.spare_width as f32,
+                y: 100.0,
+            },
+            text,
+            100.0,
+            color::BLACK,
+            false,
+        );
+        if refresh {
+            refresh_with_options(
+                fb,
+                &mxcfb_rect {
+                    top: 0,
+                    left: self.board.spare_width as u32,
+                    width: rect_width,
+                    height: 100,
+                },
+                waveform_mode::WAVEFORM_MODE_AUTO,
+            );
+        }
+    }
+
+    fn set_turn(&mut self, turn: Turn, fb: &mut Framebuffer) {
+        info!("Set turn {turn:?}");
+        self.current_turn = turn;
+        self.draw_turn(fb, true);
+    }
+
+    fn reset_game(&self, ctrl: &mut Engine, fb: &mut Framebuffer) {
+        clear_board(ctrl);
+        do_machine_move(ctrl);
+        self.redraw_stones(ctrl, fb);
+    }
+
+    fn redraw_stones(&self, ctrl: &mut Engine, fb: &mut Framebuffer) {
+        let start = Instant::now();
+        let white_stones = list_stones(ctrl, "white");
+        let black_stones = list_stones(ctrl, "black");
+        self.board.draw_board(fb, &white_stones, &black_stones);
+        self.draw_turn(fb, false);
+        draw_reset(&self.board, fb);
+        refresh(fb);
+        let elapsed = start.elapsed();
+        info!("redraw elapsed: {:.2?}", elapsed);
     }
 }
-
-pub struct MachineGame {}
 
 impl Routine for MachineGame {
     fn init(&mut self, fb: &mut Framebuffer, ctrl: &mut Engine) {
-        reset_machine_game(ctrl, fb);
-        set_turn(Turn::HumanTurn, fb);
+        set_board_size(ctrl, self.board.board_size);
+        self.reset_game(ctrl, fb);
+        self.set_turn(Turn::HumanTurn, fb);
     }
 
     fn on_multitouch_event(
-        &self,
+        &mut self,
         ctx: &mut appctx::ApplicationContext<'_>,
         event: MultitouchEvent,
         ctrl: &mut Engine,
     ) {
-        on_multitouch_event(ctx, event, ctrl);
+        match event {
+            MultitouchEvent::Press { finger } => {
+                if self.current_turn != Turn::HumanTurn {
+                    info!("Ignoring touch, as machine turn");
+                    return;
+                }
+                let fb = ctx.get_framebuffer_ref();
+
+                let rbtl = reset_button_top_left(&self.board);
+                if (finger.pos.x as i32) >= rbtl.x
+                    && (finger.pos.x as i32) < (rbtl.x + rbtl.x as i32)
+                    && (finger.pos.y as i32) >= rbtl.y
+                    && (finger.pos.y as i32) < (rbtl.y + rbtl.y as i32)
+                {
+                    *CURRENT_MODE.lock().unwrap() = crate::chooser::Mode::Chooser;
+                    ctx.stop();
+                    return;
+                }
+
+                let point = self.board.nearest_spot(finger.pos.x, finger.pos.y);
+                let pos = finger.pos;
+                if point.x >= self.board.board_size || point.y >= self.board.board_size {
+                    info!("Bad point {point:?}");
+                    return;
+                }
+                info!("Drawing: {point:?} for {pos:?}");
+                if !do_human_move(ctrl, point, "white") {
+                    info!("Bad human move");
+                    return;
+                }
+                self.set_turn(Turn::MachineTurn, fb);
+                self.redraw_stones(ctrl, fb);
+                do_machine_move(ctrl);
+                self.redraw_stones(ctrl, fb);
+                self.set_turn(Turn::HumanTurn, fb);
+            }
+            _ => {}
+        }
     }
 }
