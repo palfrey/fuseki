@@ -1,15 +1,20 @@
 use crate::{
-    board::Board,
+    board::{Board, AVAILABLE_WIDTH},
     chooser::CURRENT_MODE,
-    drawing::refresh,
+    drawing::{draw_button, refresh},
     reset::{draw_reset, reset_button_top_left, RESET_BUTTON_SIZE},
     routine::Routine,
 };
 use chrono::{DateTime, TimeDelta, Utc};
 use core::fmt;
-use gtp::{controller::Engine, Entity};
+use gtp::controller::Engine;
 use lazy_static::lazy_static;
-use libremarkable::{appctx, framebuffer::core::Framebuffer, input::MultitouchEvent};
+use libremarkable::{
+    appctx,
+    cgmath::{Point2, Vector2},
+    framebuffer::{core::Framebuffer, FramebufferDraw},
+    input::MultitouchEvent,
+};
 use log::{info, warn};
 use serde::{de, Deserialize, Serialize};
 use sgf_parse::{
@@ -27,10 +32,6 @@ lazy_static! {
 struct LoginInfo {
     username: String,
     password: String,
-}
-
-lazy_static! {
-    static ref LOGIN_INFO: Mutex<LoginInfo> = Mutex::new(LoginInfo::default());
 }
 
 fn dragon_date<'de, D>(deserializer: D) -> Result<DateTime<Utc>, D::Error>
@@ -113,12 +114,20 @@ where
     deserializer.deserialize_any(TimeRemainingStringVisitor)
 }
 
+#[derive(Debug, Deserialize, PartialEq, Clone)]
+enum PlayerColor {
+    #[serde(alias = "B")]
+    Black,
+    #[serde(alias = "W")]
+    White,
+}
+
 #[derive(Debug, Deserialize)]
 struct GameRecord {
     g: String,
     game_id: u32,
     opponent_handle: String,
-    player_color: String,
+    player_color: PlayerColor,
     #[serde(deserialize_with = "dragon_date")]
     lastmove_date: DateTime<Utc>,
     #[serde(deserialize_with = "time_remaining")]
@@ -173,28 +182,29 @@ struct GameRecord {
 //     }
 // }
 
+pub const UNDO_BUTTON_SIZE: Vector2<u32> = Vector2 { x: 250, y: 95 };
+pub const COMMIT_BUTTON_SIZE: Vector2<u32> = Vector2 { x: 350, y: 95 };
+
+pub struct BoardConfig {
+    board: Board,
+    undo_button_top_left: Point2<i32>,
+    commit_button_top_left: Point2<i32>,
+    player_color: PlayerColor,
+    game_id: u32,
+    last_move_id: u32,
+}
+
 pub struct DragonGoServer {
     client: reqwest::blocking::Client,
-    white_stones: Vec<Entity>,
-    black_stones: Vec<Entity>,
-    board: Option<Board>,
+    white_stones: Vec<Point2<u8>>,
+    black_stones: Vec<Point2<u8>>,
+    board_config: Option<BoardConfig>,
+    chosen: Option<Point2<u8>>,
+    login_info: LoginInfo,
 }
 
 impl DragonGoServer {
-    fn redraw_stones(&self, fb: &mut Framebuffer) {
-        let start = Instant::now();
-        if let Some(ref board) = self.board {
-            board.draw_board(fb, &self.white_stones, &self.black_stones);
-            draw_reset(board, fb);
-        }
-        refresh(fb);
-        let elapsed = start.elapsed();
-        info!("redraw elapsed: {:.2?}", elapsed);
-    }
-}
-
-impl Default for DragonGoServer {
-    fn default() -> Self {
+    pub fn new() -> Self {
         Self {
             white_stones: vec![],
             black_stones: vec![],
@@ -202,11 +212,169 @@ impl Default for DragonGoServer {
                 .cookie_store(true)
                 .build()
                 .unwrap(),
-            board: None,
+            board_config: None,
+            chosen: None,
+            login_info: LoginInfo::default(),
+        }
+    }
+
+    fn draw_choices(&self, fb: &mut Framebuffer) {
+        if let Some(ref board_config) = self.board_config {
+            if let Some(ref chosen) = self.chosen {
+                draw_button(
+                    fb,
+                    "Undo",
+                    board_config.undo_button_top_left,
+                    UNDO_BUTTON_SIZE,
+                );
+                draw_button(
+                    fb,
+                    "Commit",
+                    board_config.commit_button_top_left,
+                    COMMIT_BUTTON_SIZE,
+                );
+
+                board_config.board.draw_piece(
+                    fb,
+                    chosen.x,
+                    chosen.y,
+                    board_config.player_color == PlayerColor::White,
+                );
+            }
+        }
+    }
+
+    fn redraw_stones(&self, fb: &mut Framebuffer) {
+        fb.clear();
+        let start = Instant::now();
+        if let Some(ref board_config) = self.board_config {
+            board_config
+                .board
+                .draw_board(fb, &self.white_stones, &self.black_stones);
+            draw_reset(&board_config.board, fb);
+            self.draw_choices(fb);
+        }
+        refresh(fb);
+        let elapsed = start.elapsed();
+        info!("redraw elapsed: {:.2?}", elapsed);
+    }
+
+    fn load_next_game(&mut self) {
+        self.white_stones.clear();
+        self.black_stones.clear();
+        let login_resp = self
+            .client
+            .post(format!(
+                "https://www.dragongoserver.net/login.php?quick_mode=1&userid={}&passwd={}",
+                self.login_info.username, self.login_info.password
+            ))
+            .send()
+            .unwrap();
+        // info!("Headers: {:#?}", &login_resp.headers());
+        let login_text = login_resp.text().unwrap();
+        if !login_text.contains("Ok") {
+            warn!("Error logging in: {}", login_text);
+            return;
+        }
+        let status = self
+            .client
+            .get(format!(
+                "https://www.dragongoserver.net/quick_status.php?user={}&version=2",
+                self.login_info.username
+            ))
+            .send()
+            .unwrap()
+            .text()
+            .unwrap();
+        let mut first_expiring_game: Option<GameRecord> = None;
+        // info!("Status: {}", status);
+        for record_raw_res in csv::ReaderBuilder::new()
+            .has_headers(false)
+            .flexible(true)
+            .from_reader(status.as_bytes())
+            .records()
+        {
+            // info!("Record raw: {:#?}", record_raw_res);
+            let record_raw = record_raw_res.unwrap();
+            if !record_raw.get(0).unwrap().starts_with("G") {
+                continue;
+            }
+            let record: GameRecord = record_raw.deserialize(None).unwrap();
+            info!("Game: {:#?}", record);
+            if first_expiring_game
+                .as_ref()
+                .and_then(|g| Some(g.time_remaining > record.time_remaining))
+                .unwrap_or(true)
+            {
+                first_expiring_game.replace(record);
+            }
+        }
+
+        if let Some(game) = first_expiring_game {
+            let raw_sgf = self
+                    .client
+                    .get(format!(
+                        "https://www.dragongoserver.net/sgf.php?gid={}&owned_comments=N&quick_mode=0&no_cache=0",
+                        game.game_id
+                    ))
+                    .send()
+                    .unwrap()
+                    .text()
+                    .unwrap();
+            let props = get_sgf_properties(&raw_sgf);
+            for prop in props {
+                match prop {
+                    Prop::W(white_move) => {
+                        if let Move::Move(point) = white_move {
+                            self.white_stones.push(Point2 {
+                                x: (point.x + 1),
+                                y: (point.y + 1),
+                            })
+                        }
+                    }
+                    Prop::B(black_move) => {
+                        if let Move::Move(point) = black_move {
+                            self.black_stones.push(Point2 {
+                                x: (point.x + 1),
+                                y: (point.y + 1),
+                            })
+                        }
+                    }
+                    Prop::AB(black_moves) => {
+                        for point in black_moves {
+                            self.black_stones.push(Point2 {
+                                x: (point.x + 1),
+                                y: (point.y + 1),
+                            })
+                        }
+                    }
+                    Prop::SZ(size) => {
+                        let board = Board::new(size.0);
+                        let undo_button_top_left = Point2 {
+                            x: (board.spare_width + AVAILABLE_WIDTH / 2 - 170) as i32,
+                            y: 20,
+                        };
+                        let commit_button_top_left = Point2 {
+                            x: (board.spare_width + AVAILABLE_WIDTH / 2 - 640) as i32,
+                            y: 20,
+                        };
+                        self.board_config = Some(BoardConfig {
+                            player_color: game.player_color.clone(),
+                            board,
+                            undo_button_top_left,
+                            commit_button_top_left,
+                            game_id: game.game_id,
+                            last_move_id: game.move_id,
+                        });
+                    }
+                    other => {
+                        info!("Other prop: {other}")
+                    }
+                }
+            }
         }
     }
 }
-
 fn get_sgf_properties_for_node(node: &SgfNode<Prop>) -> Vec<Prop> {
     let mut output = vec![];
     for prop in node.properties() {
@@ -252,95 +420,9 @@ impl Routine for DragonGoServer {
             info!("Dumped default login file");
         } else {
             info!("Loaded login info");
-            let login_resp = self
-                .client
-                .post(format!(
-                    "https://www.dragongoserver.net/login.php?quick_mode=1&userid={}&passwd={}",
-                    login_info.username, login_info.password
-                ))
-                .send()
-                .unwrap();
-            // info!("Headers: {:#?}", &login_resp.headers());
-            let login_text = login_resp.text().unwrap();
-            if !login_text.contains("Ok") {
-                warn!("Error logging in: {}", login_text);
-            } else {
-                let status = self
-                    .client
-                    .get(format!(
-                        "https://www.dragongoserver.net/quick_status.php?user={}&version=2",
-                        login_info.username
-                    ))
-                    .send()
-                    .unwrap()
-                    .text()
-                    .unwrap();
-                let mut first_expiring_game: Option<GameRecord> = None;
-                // info!("Status: {}", status);
-                for record_raw_res in csv::ReaderBuilder::new()
-                    .has_headers(false)
-                    .flexible(true)
-                    .from_reader(status.as_bytes())
-                    .records()
-                {
-                    // info!("Record raw: {:#?}", record_raw_res);
-                    let record_raw = record_raw_res.unwrap();
-                    if !record_raw.get(0).unwrap().starts_with("G") {
-                        continue;
-                    }
-                    let record: GameRecord = record_raw.deserialize(None).unwrap();
-                    info!("Game: {:#?}", record);
-                    if first_expiring_game
-                        .as_ref()
-                        .and_then(|g| Some(g.time_remaining > record.time_remaining))
-                        .unwrap_or(true)
-                    {
-                        first_expiring_game.replace(record);
-                    }
-                }
-
-                if let Some(game) = first_expiring_game {
-                    let raw_sgf = self
-                    .client
-                    .get(format!(
-                        "https://www.dragongoserver.net/sgf.php?gid={}&owned_comments=N&quick_mode=0&no_cache=0",
-                        game.game_id
-                    ))
-                    .send()
-                    .unwrap()
-                    .text()
-                    .unwrap();
-                    let props = get_sgf_properties(&raw_sgf);
-                    for prop in props {
-                        match prop {
-                            Prop::W(white_move) => {
-                                if let Move::Move(point) = white_move {
-                                    self.white_stones.push(Entity::Vertex((
-                                        (point.x + 1) as i32,
-                                        (point.y + 1) as i32,
-                                    )))
-                                }
-                            }
-                            Prop::AB(black_moves) => {
-                                for point in black_moves {
-                                    self.black_stones.push(Entity::Vertex((
-                                        (point.x + 1) as i32,
-                                        (point.y + 1) as i32,
-                                    )))
-                                }
-                            }
-                            Prop::SZ(size) => {
-                                self.board = Some(Board::new(size.0));
-                            }
-                            other => {
-                                info!("Other prop: {other}")
-                            }
-                        }
-                    }
-                }
-            }
         }
-        *LOGIN_INFO.lock().expect("Can lock login_info") = login_info;
+        self.login_info = login_info;
+        self.load_next_game();
         self.redraw_stones(fb);
     }
 
@@ -355,7 +437,8 @@ impl Routine for DragonGoServer {
                 let start = Instant::now();
                 let fb = ctx.get_framebuffer_ref();
 
-                if let Some(ref board) = self.board {
+                if let Some(ref board_config) = self.board_config {
+                    let board = &board_config.board;
                     let rbtl = reset_button_top_left(board);
                     info!("rbtl: {rbtl:?}");
                     if (finger.pos.x as i32) >= rbtl.x
@@ -368,14 +451,69 @@ impl Routine for DragonGoServer {
                         return;
                     }
 
-                    let point = board.nearest_spot(finger.pos.x, finger.pos.y);
-                    if point.x >= board.board_size || point.y >= board.board_size {
-                        info!("Bad point {point:?} from {:?}", finger.pos);
-                        return;
+                    if self.chosen.is_none() {
+                        let point = board.nearest_spot(finger.pos.x, finger.pos.y);
+                        if point.x >= board.board_size || point.y >= board.board_size {
+                            info!("Bad point {point:?} from {:?}", finger.pos);
+                            return;
+                        }
+                        // FIXME: Because GTP points are offset
+                        let offset_point = Point2 {
+                            x: point.x + 1,
+                            y: point.y + 1,
+                        };
+                        if self.white_stones.contains(&offset_point)
+                            || self.black_stones.contains(&offset_point)
+                        {
+                            info!("Can't use existing point");
+                            return;
+                        }
+                        info!("Drawing: {point:?} for {:?}", finger.pos);
+                        self.chosen = Some(point);
+                        self.redraw_stones(fb);
+                    } else {
+                        if (finger.pos.x as i32) >= board_config.undo_button_top_left.x
+                            && (finger.pos.x as i32)
+                                < (board_config.undo_button_top_left.x + UNDO_BUTTON_SIZE.x as i32)
+                            && (finger.pos.y as i32) >= board_config.undo_button_top_left.y
+                            && (finger.pos.y as i32)
+                                < (board_config.undo_button_top_left.y + UNDO_BUTTON_SIZE.y as i32)
+                        {
+                            self.chosen = None;
+                            self.redraw_stones(fb);
+                        }
+
+                        if (finger.pos.x as i32) >= board_config.commit_button_top_left.x
+                            && (finger.pos.x as i32)
+                                < (board_config.commit_button_top_left.x
+                                    + COMMIT_BUTTON_SIZE.x as i32)
+                            && (finger.pos.y as i32) >= board_config.commit_button_top_left.y
+                            && (finger.pos.y as i32)
+                                < (board_config.commit_button_top_left.y
+                                    + COMMIT_BUTTON_SIZE.y as i32)
+                        {
+                            let chosen = self.chosen.take().unwrap();
+                            // because i
+                            let column_chars = (0..board.board_size + 1)
+                                .into_iter()
+                                .map(|x| char::from_u32(('a' as u32) + x as u32).unwrap())
+                                .filter(|p| *p != 'i')
+                                .collect::<Vec<char>>();
+                            let url = format!(
+                                "https://www.dragongoserver.net/quick_do.php?obj=game&cmd=move&gid={}&move_id={}&move={}{}",
+                                board_config.game_id,
+                                board_config.last_move_id,
+                                column_chars.get(chosen.x as usize).unwrap(),
+                                board_config.board.board_size-chosen.y
+                            );
+                            info!("Url: {url}");
+                            let move_resp = self.client.post(url).send().unwrap().text().unwrap();
+                            info!("Move resp: {}", move_resp);
+
+                            self.load_next_game();
+                            self.redraw_stones(fb);
+                        }
                     }
-                    let pos = finger.pos;
-                    info!("Drawing: {point:?} for {pos:?}");
-                    board.refresh_and_draw_one_piece(fb, point.x, point.y, true);
                 }
 
                 let elapsed = start.elapsed();

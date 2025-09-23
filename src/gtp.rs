@@ -27,7 +27,7 @@ pub fn set_board_size(ctrl: &mut Engine, board_size: u8) {
     get_response(ctrl);
 }
 
-pub fn list_stones(ctrl: &mut Engine, colour: &str) -> Vec<gtp::Entity> {
+pub fn list_stones(ctrl: &mut Engine, colour: &str) -> Vec<Point2<u8>> {
     let start = Instant::now();
     let cmd = Command::new_with_args("list_stones", |e| e.s(colour));
     info!("list_stones: {}", cmd.to_string());
@@ -43,7 +43,19 @@ pub fn list_stones(ctrl: &mut Engine, colour: &str) -> Vec<gtp::Entity> {
     });
     let elapsed = start.elapsed();
     info!("list_stones elapsed: {:.2?}", elapsed);
-    return ev.unwrap();
+    return ev
+        .unwrap()
+        .iter()
+        .map(|entity| match entity {
+            gtp::Entity::Vertex((x, y)) => Some(Point2 {
+                x: *x as u8,
+                y: *y as u8,
+            }),
+            _ => None,
+        })
+        .filter(|p| p.is_some())
+        .map(|p| p.unwrap())
+        .collect();
 }
 
 pub fn do_human_move(ctrl: &mut Engine, pos: Point2<u8>, colour: &str) -> bool {

@@ -8,11 +8,11 @@ use crate::{
     drawing::draw_button,
 };
 
-pub const RESET_BUTTON_SIZE: Vector2<u32> = Vector2 { x: 500, y: 95 };
+pub const RESET_BUTTON_SIZE: Vector2<u32> = Vector2 { x: 400, y: 95 };
 
 pub fn reset_button_top_left(board: &Board) -> Point2<i32> {
     Point2 {
-        x: (board.spare_width + AVAILABLE_WIDTH / 2 - 10) as i32,
+        x: (board.spare_width + AVAILABLE_WIDTH / 2 + 200) as i32,
         y: 20,
     }
 }

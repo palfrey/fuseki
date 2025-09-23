@@ -1,4 +1,3 @@
-use gtp::Entity;
 use libremarkable::{
     cgmath::{self, Point2},
     framebuffer::{
@@ -41,7 +40,7 @@ impl Board {
         }
     }
 
-    fn draw_piece(&self, fb: &mut Framebuffer, x: u8, y: u8, white: bool) -> mxcfb_rect {
+    pub fn draw_piece(&self, fb: &mut Framebuffer, x: u8, y: u8, white: bool) -> mxcfb_rect {
         // info!("draw_piece: {x} {y} {white}");
         let point = Point2 {
             x: (self.spare_width + (self.square_size * x as u16)) as i32,
@@ -84,14 +83,9 @@ impl Board {
         }
     }
 
-    fn draw_stones(&self, fb: &mut Framebuffer, ev: &Vec<gtp::Entity>, white: bool) {
+    fn draw_stones(&self, fb: &mut Framebuffer, ev: &Vec<Point2<u8>>, white: bool) {
         for entity in ev {
-            match entity {
-                gtp::Entity::Vertex((x, y)) => {
-                    self.draw_piece(fb, (x - 1) as u8, (y - 1) as u8, white);
-                }
-                _ => {}
-            }
+            self.draw_piece(fb, entity.x - 1, entity.y - 1, white);
         }
     }
 
@@ -116,8 +110,8 @@ impl Board {
     pub fn draw_board(
         &self,
         fb: &mut Framebuffer,
-        white_stones: &Vec<Entity>,
-        black_stones: &Vec<Entity>,
+        white_stones: &Vec<Point2<u8>>,
+        black_stones: &Vec<Point2<u8>>,
     ) {
         self.draw_grid(fb);
         self.draw_stones(fb, white_stones, true);
