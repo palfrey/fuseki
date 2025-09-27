@@ -203,6 +203,53 @@ pub struct DragonGoServer {
     login_info: LoginInfo,
 }
 
+enum Actions {
+    Refresh,
+    Exit,
+}
+
+struct Button {
+    text: String,
+    top_left: Point2<i32>,
+    size: Vector2<u32>,
+    action: Actions,
+}
+
+const BUTTON_WIDTH: u32 = 700;
+const TOP_LEFT_X: i32 =
+    ((libremarkable::dimensions::DISPLAYWIDTH as u32 - BUTTON_WIDTH) / 2) as i32;
+
+lazy_static! {
+    static ref NO_GAME_BUTTONS: Vec<Button> = {
+        vec![
+            Button {
+                text: "Refresh".to_string(),
+                top_left: Point2 {
+                    x: TOP_LEFT_X,
+                    y: 100,
+                },
+                size: Vector2 {
+                    x: BUTTON_WIDTH,
+                    y: 95,
+                },
+                action: Actions::Refresh,
+            },
+            Button {
+                text: "Exit".to_string(),
+                top_left: Point2 {
+                    x: TOP_LEFT_X,
+                    y: 300,
+                },
+                size: Vector2 {
+                    x: BUTTON_WIDTH,
+                    y: 95,
+                },
+                action: Actions::Exit,
+            },
+        ]
+    };
+}
+
 impl DragonGoServer {
     pub fn new() -> Self {
         Self {
@@ -253,6 +300,10 @@ impl DragonGoServer {
                 .draw_board(fb, &self.white_stones, &self.black_stones);
             draw_reset(&board_config.board, fb);
             self.draw_choices(fb);
+        } else {
+            for button in NO_GAME_BUTTONS.iter() {
+                draw_button(fb, &button.text, button.top_left, button.size);
+            }
         }
         refresh(fb);
         let elapsed = start.elapsed();
@@ -512,6 +563,26 @@ impl Routine for DragonGoServer {
 
                             self.load_next_game();
                             self.redraw_stones(fb);
+                        }
+                    }
+                } else {
+                    for button in NO_GAME_BUTTONS.iter() {
+                        if (finger.pos.x as i32) >= button.top_left.x
+                            && (finger.pos.x as i32) < (button.top_left.x + button.size.x as i32)
+                            && (finger.pos.y as i32) >= button.top_left.y
+                            && (finger.pos.y as i32) < (button.top_left.y + button.size.y as i32)
+                        {
+                            match button.action {
+                                Actions::Refresh => {
+                                    self.load_next_game();
+                                    self.redraw_stones(fb);
+                                }
+                                Actions::Exit => {
+                                    *CURRENT_MODE.lock().unwrap() = crate::chooser::Mode::Chooser;
+                                    ctx.stop();
+                                    return;
+                                }
+                            }
                         }
                     }
                 }
