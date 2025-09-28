@@ -274,8 +274,20 @@ impl DragonGoServer {
                 .draw_board(fb, &self.white_stones, &self.black_stones);
             draw_reset(&board_config.board, fb);
             self.draw_choices(fb);
-            self.draw_status(fb, &format!("opp: {}", &board_config.opponent_handle), false, 0);
-            self.draw_status(fb, &format!("colour: {:?}",board_config.player_color), false, 120);
+            if self.chosen.is_none() {
+                self.draw_status(
+                    fb,
+                    &format!("opp: {}", &board_config.opponent_handle),
+                    false,
+                    0,
+                );
+            }
+            self.draw_status(
+                fb,
+                &format!("colour: {:?}", board_config.player_color),
+                false,
+                120,
+            );
         } else {
             for button in NO_GAME_BUTTONS.iter() {
                 draw_button(fb, &button.text, button.top_left, button.size);
