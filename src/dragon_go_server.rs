@@ -1,7 +1,7 @@
 use crate::{
     board::{Board, AVAILABLE_WIDTH},
     chooser::CURRENT_MODE,
-    drawing::{draw_button, refresh},
+    drawing::{draw_button, refresh, refresh_with_options},
     reset::{draw_reset, reset_button_top_left, RESET_BUTTON_SIZE},
     routine::Routine,
 };
@@ -12,7 +12,11 @@ use lazy_static::lazy_static;
 use libremarkable::{
     appctx,
     cgmath::{Point2, Vector2},
-    framebuffer::{core::Framebuffer, FramebufferDraw},
+    framebuffer::{
+        common::{color, mxcfb_rect, waveform_mode},
+        core::Framebuffer,
+        FramebufferDraw,
+    },
     input::MultitouchEvent,
 };
 use log::{error, info, warn};
@@ -149,44 +153,6 @@ struct GameRecord {
     handicap: u8,
 }
 
-// fn draw_status(fb: &mut Framebuffer, text: &str, refresh: bool) {
-//     let rect_width = 550;
-//     fb.fill_rect(
-//         Point2 {
-//             x: SPARE_WIDTH as i32,
-//             y: 0,
-//         },
-//         Vector2 {
-//             x: rect_width,
-//             y: 100,
-//         },
-//         color::WHITE,
-//     );
-//     fb.draw_text(
-//         Point2 {
-//             x: SPARE_WIDTH as f32,
-//             y: 100.0,
-//         },
-//         text,
-//         100.0,
-//         color::BLACK,
-//         false,
-//     );
-
-//     if refresh {
-//         refresh_with_options(
-//             fb,
-//             &mxcfb_rect {
-//                 top: 0,
-//                 left: SPARE_WIDTH as u32,
-//                 width: rect_width,
-//                 height: 100,
-//             },
-//             waveform_mode::WAVEFORM_MODE_AUTO,
-//         );
-//     }
-// }
-
 pub const UNDO_BUTTON_SIZE: Vector2<u32> = Vector2 { x: 250, y: 95 };
 pub const COMMIT_BUTTON_SIZE: Vector2<u32> = Vector2 { x: 350, y: 95 };
 
@@ -197,6 +163,7 @@ pub struct BoardConfig {
     player_color: PlayerColor,
     game_id: u32,
     last_move_id: u32,
+    opponent_handle: String,
 }
 
 pub struct DragonGoServer {
@@ -307,6 +274,7 @@ impl DragonGoServer {
                 .draw_board(fb, &self.white_stones, &self.black_stones);
             draw_reset(&board_config.board, fb);
             self.draw_choices(fb);
+            self.draw_status(fb, &board_config.opponent_handle, false);
         } else {
             for button in NO_GAME_BUTTONS.iter() {
                 draw_button(fb, &button.text, button.top_left, button.size);
@@ -423,12 +391,59 @@ impl DragonGoServer {
                             commit_button_top_left,
                             game_id: game.game_id,
                             last_move_id: game.move_id,
+                            opponent_handle: game
+                                .opponent_handle
+                                .strip_prefix("'")
+                                .unwrap()
+                                .strip_suffix("'")
+                                .unwrap()
+                                .to_string(),
                         });
                     }
                     other => {
                         info!("Other prop: {other}")
                     }
                 }
+            }
+        }
+    }
+
+    fn draw_status(&self, fb: &mut Framebuffer, text: &str, refresh: bool) {
+        if let Some(ref board_config) = self.board_config {
+            let rect_width = 550;
+            fb.fill_rect(
+                Point2 {
+                    x: board_config.board.spare_width as i32,
+                    y: 0,
+                },
+                Vector2 {
+                    x: rect_width,
+                    y: 100,
+                },
+                color::WHITE,
+            );
+            fb.draw_text(
+                Point2 {
+                    x: board_config.board.spare_width as f32,
+                    y: 100.0,
+                },
+                text,
+                100.0,
+                color::BLACK,
+                false,
+            );
+
+            if refresh {
+                refresh_with_options(
+                    fb,
+                    &mxcfb_rect {
+                        top: 0,
+                        left: board_config.board.spare_width as u32,
+                        width: rect_width,
+                        height: 100,
+                    },
+                    waveform_mode::WAVEFORM_MODE_AUTO,
+                );
             }
         }
     }
