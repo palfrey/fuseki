@@ -418,6 +418,8 @@ impl DragonGoServer {
                     }
                 }
             }
+        } else {
+            self.board_config = None;
         }
     }
 
