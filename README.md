@@ -11,7 +11,7 @@ The [Toltec toolchain](https://github.com/toltec-dev/toolchain) is used for the 
 1. Checkout this repository (including submodules)
 2. cd `gnugo`
 3. `autoreconf --install` (note this is done outside of the Docker container in the next step as we need Autoconf >= 2.71 and the build container doesn't have that)
-4. ``docker run --rm -it -v `pwd`:/work ghcr.io/toltec-dev/base:v3.2 bash``
+4. ``docker run --rm -it -v `pwd`:/work ghcr.io/toltec-dev/base:v3.3 bash``
     * 5-7 are inside this shell
 5. `cd /work/gnugo`
 6. `CFLAGS="-O2 -flto=auto" LDFLAGS="-O2 -flto=auto" ./configure --host arm-remarkable-linux-gnueabihf --build x86_64-linux-gnu --without-curses --without-docs`

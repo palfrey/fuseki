@@ -7,7 +7,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/toltec-dev/rust:v3.1
+      image: ghcr.io/toltec-dev/rust:v3.3
       options: --user root
     steps:
       - name: Check out repository code
