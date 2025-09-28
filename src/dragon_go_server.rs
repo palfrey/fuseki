@@ -1,7 +1,7 @@
 use crate::{
     board::{Board, AVAILABLE_WIDTH},
     chooser::CURRENT_MODE,
-    drawing::{draw_button, refresh, refresh_with_options},
+    drawing::{draw_button, draw_multiline_text, refresh, refresh_with_options},
     reset::{draw_reset, reset_button_top_left, RESET_BUTTON_SIZE},
     routine::Routine,
 };
@@ -174,6 +174,7 @@ pub struct DragonGoServer {
     chosen: Option<Point2<u8>>,
     login_info: LoginInfo,
     fb: Option<&'static mut Framebuffer>,
+    error: Option<String>,
 }
 
 enum Actions {
@@ -236,6 +237,7 @@ impl DragonGoServer {
             chosen: None,
             login_info: LoginInfo::default(),
             fb: None,
+            error: None,
         }
     }
 
@@ -289,15 +291,23 @@ impl DragonGoServer {
                 120,
             );
         } else {
-            fb.draw_text(
+            let text = match self.error {
+                Some(ref err) => err.clone(),
+                None => "All games up-to-date".to_string(),
+            };
+            draw_multiline_text(
+                fb,
                 Point2 {
-                    x: TOP_LEFT_X as f32,
+                    x: if self.error.is_none() {
+                        TOP_LEFT_X
+                    } else {
+                        100
+                    } as f32,
                     y: 100 as f32,
                 },
-                "All games up-to-date",
-                100.0,
-                color::BLACK,
-                false,
+                &text,
+                if self.error.is_none() { 100.0 } else { 50.0 },
+                60,
             );
             for button in NO_GAME_BUTTONS.iter() {
                 draw_button(fb, &button.text, button.top_left, button.size);
@@ -311,15 +321,21 @@ impl DragonGoServer {
     fn load_next_game(&mut self) {
         self.white_stones.clear();
         self.black_stones.clear();
-        let login_resp = self
+        let login_resp = match self
             .client
             .post(format!(
                 "https://www.dragongoserver.net/login.php?quick_mode=1&userid={}&passwd={}",
                 self.login_info.username, self.login_info.password
             ))
             .send()
-            .unwrap();
-        // info!("Headers: {:#?}", &login_resp.headers());
+        {
+            Ok(resp) => resp,
+            Err(err) => {
+                error!("Error logging in: {}", err);
+                self.error = Some(format!("Error logging in: {}", err));
+                return;
+            }
+        };
         let login_text = login_resp.text().unwrap();
         if !login_text.contains("Ok") {
             warn!("Error logging in: {}", login_text);
@@ -538,7 +554,7 @@ impl Routine for DragonGoServer {
         } else {
             info!("Chosen set, not updating");
         }
-        Some(Duration::from_secs(60*10))
+        Some(Duration::from_secs(60 * 10))
     }
 
     fn on_multitouch_event(

@@ -46,3 +46,28 @@ pub fn draw_button(fb: &mut Framebuffer, text: &str, top_left: Point2<i32>, size
         false,
     );
 }
+
+pub fn draw_multiline_text(
+    fb: &mut Framebuffer,
+    pos: Point2<f32>,
+    text: &str,
+    size: f32,
+    split_point: usize,
+) {
+    if text.len() < split_point {
+        fb.draw_text(pos, text, size, color::BLACK, false);
+    } else {
+        let (first, second) = text.split_at(split_point);
+        fb.draw_text(pos, first, size, color::BLACK, false);
+        draw_multiline_text(
+            fb,
+            Point2 {
+                x: pos.x,
+                y: pos.y + size,
+            },
+            second,
+            size,
+            split_point,
+        );
+    }
+}
