@@ -274,7 +274,8 @@ impl DragonGoServer {
                 .draw_board(fb, &self.white_stones, &self.black_stones);
             draw_reset(&board_config.board, fb);
             self.draw_choices(fb);
-            self.draw_status(fb, &board_config.opponent_handle, false);
+            self.draw_status(fb, &format!("opp: {}", &board_config.opponent_handle), false, 0);
+            self.draw_status(fb, &format!("colour: {:?}",board_config.player_color), false, 120);
         } else {
             for button in NO_GAME_BUTTONS.iter() {
                 draw_button(fb, &button.text, button.top_left, button.size);
@@ -408,24 +409,24 @@ impl DragonGoServer {
         }
     }
 
-    fn draw_status(&self, fb: &mut Framebuffer, text: &str, refresh: bool) {
+    fn draw_status(&self, fb: &mut Framebuffer, text: &str, refresh: bool, offset: u16) {
         if let Some(ref board_config) = self.board_config {
             let rect_width = 550;
             fb.fill_rect(
                 Point2 {
                     x: board_config.board.spare_width as i32,
-                    y: 0,
+                    y: offset as i32,
                 },
                 Vector2 {
                     x: rect_width,
-                    y: 100,
+                    y: (80 + offset) as u32,
                 },
                 color::WHITE,
             );
             fb.draw_text(
                 Point2 {
                     x: board_config.board.spare_width as f32,
-                    y: 100.0,
+                    y: (100 + offset) as f32,
                 },
                 text,
                 100.0,
@@ -437,10 +438,10 @@ impl DragonGoServer {
                 refresh_with_options(
                     fb,
                     &mxcfb_rect {
-                        top: 0,
+                        top: offset as u32,
                         left: board_config.board.spare_width as u32,
                         width: rect_width,
-                        height: 100,
+                        height: 80,
                     },
                     waveform_mode::WAVEFORM_MODE_AUTO,
                 );
