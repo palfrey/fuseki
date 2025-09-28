@@ -7,7 +7,7 @@ use libremarkable::{
     },
 };
 
-pub fn refresh_with_options(fb: &mut Framebuffer, region: &mxcfb_rect, waveform: waveform_mode) {
+pub fn refresh_with_options(fb: &Framebuffer, region: &mxcfb_rect, waveform: waveform_mode) {
     let marker = fb.partial_refresh(
         region,
         libremarkable::framebuffer::PartialRefreshMode::Async,
@@ -20,7 +20,7 @@ pub fn refresh_with_options(fb: &mut Framebuffer, region: &mxcfb_rect, waveform:
     fb.wait_refresh_complete(marker);
 }
 
-pub fn refresh(fb: &mut Framebuffer) {
+pub fn refresh(fb: &Framebuffer) {
     refresh_with_options(
         fb,
         &mxcfb_rect {

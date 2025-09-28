@@ -15,13 +15,18 @@ use libremarkable::{
     framebuffer::{core::Framebuffer, FramebufferDraw},
     input::MultitouchEvent,
 };
-use log::{info, warn};
+use log::{error, info, warn};
 use serde::{de, Deserialize, Serialize};
 use sgf_parse::{
     go::{parse, Move, Prop},
     SgfNode,
 };
-use std::{fs, ops::Deref, sync::Mutex, time::Instant};
+use std::{
+    fs,
+    ops::Deref,
+    sync::Mutex,
+    time::{Duration, Instant},
+};
 
 const DEFAULT_LOGIN_FILE: &str = "/opt/dragon-go-server-login";
 lazy_static! {
@@ -201,6 +206,7 @@ pub struct DragonGoServer {
     board_config: Option<BoardConfig>,
     chosen: Option<Point2<u8>>,
     login_info: LoginInfo,
+    fb: Option<&'static mut Framebuffer>,
 }
 
 enum Actions {
@@ -262,6 +268,7 @@ impl DragonGoServer {
             board_config: None,
             chosen: None,
             login_info: LoginInfo::default(),
+            fb: None,
         }
     }
 
@@ -446,7 +453,7 @@ fn get_sgf_properties(raw_sgf: &str) -> Vec<Prop> {
 }
 
 impl Routine for DragonGoServer {
-    fn init(&mut self, fb: &mut Framebuffer, _ctrl: &mut Engine) {
+    fn init(&mut self, fb: &'static mut Framebuffer, _ctrl: &mut Engine) {
         let current_login_file = LOGIN_FILE.lock().expect("get login_file");
         let login_raw = fs::read(current_login_file.deref());
         let login_info: LoginInfo = match login_raw {
@@ -473,8 +480,25 @@ impl Routine for DragonGoServer {
             info!("Loaded login info");
         }
         self.login_info = login_info;
-        self.load_next_game();
-        self.redraw_stones(fb);
+        self.fb = Some(fb);
+    }
+
+    fn update_loop(&mut self) -> Option<Duration> {
+        info!("Update game");
+        if self.chosen.is_none() {
+            self.load_next_game();
+            let current_fb = self.fb.take();
+            if current_fb.is_some() {
+                let mut fb = current_fb.unwrap();
+                self.redraw_stones(&mut fb);
+                let _empty = self.fb.insert(fb);
+            } else {
+                error!("No framebuffer!");
+            }
+        } else {
+            info!("Chosen set, not updating");
+        }
+        Some(Duration::from_secs(30))
     }
 
     fn on_multitouch_event(
