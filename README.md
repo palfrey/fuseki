@@ -19,7 +19,7 @@ The [Toltec toolchain](https://github.com/toltec-dev/toolchain) is used for the 
     * `interface/gnugo` should now exist
 8. Exit the docker container, and return to the root directory
 9. `rustup target add --toolchain stable armv7-unknown-linux-gnueabihf`
-10. `make build deploy-demo`
+10. `make run`
      * You may need to follow the [SSH access guide](https://remarkable.guide/guide/access/ssh.html) and set `DEVICE_HOST` to something accordingly (`10.11.99.1` probably if you're connected via USB)
 
 ## Icon
