@@ -528,7 +528,7 @@ impl Routine for DragonGoServer {
         } else {
             info!("Chosen set, not updating");
         }
-        Some(Duration::from_secs(30))
+        Some(Duration::from_secs(60*10))
     }
 
     fn on_multitouch_event(
