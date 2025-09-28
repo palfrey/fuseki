@@ -199,7 +199,7 @@ lazy_static! {
                 text: "Refresh".to_string(),
                 top_left: Point2 {
                     x: TOP_LEFT_X,
-                    y: 100,
+                    y: 300,
                 },
                 size: Vector2 {
                     x: BUTTON_WIDTH,
@@ -211,7 +211,7 @@ lazy_static! {
                 text: "Exit".to_string(),
                 top_left: Point2 {
                     x: TOP_LEFT_X,
-                    y: 300,
+                    y: 500,
                 },
                 size: Vector2 {
                     x: BUTTON_WIDTH,
@@ -289,6 +289,16 @@ impl DragonGoServer {
                 120,
             );
         } else {
+            fb.draw_text(
+                Point2 {
+                    x: TOP_LEFT_X as f32,
+                    y: 100 as f32,
+                },
+                "All games up-to-date",
+                100.0,
+                color::BLACK,
+                false,
+            );
             for button in NO_GAME_BUTTONS.iter() {
                 draw_button(fb, &button.text, button.top_left, button.size);
             }
