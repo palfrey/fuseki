@@ -1,0 +1,26 @@
+(
+;FF[4]GM[1]
+AP[DGS:1.20.5]
+PC[Dragon Go Server: https://www.dragongoserver.net/]
+DT[2025-09-21,2025-09-21]
+GN[whiterobot-fuseki-test-1483923-20250921]
+SO[https://www.dragongoserver.net/game.php?gid=1483923]
+PB[Fuseki Test Account (fuseki-test)]
+PW[White Robot (whiterobot)]
+BR[23k]
+WR[5k]
+XM[5]
+GC[Game ID: 1483923
+Game Type: GO (1:1)
+Rated: Y
+
+White Start Rating: 5k (-33%) - Elo rating 1567
+Black Start Rating: 23k (0%) - Elo rating -200]
+OT[30 days with 1 day extra per move]
+RU[Japanese]
+SZ[13]
+KM[0.5]
+HA[4]
+AB[dd][jj][dj][jd]PL[W]
+;MN[1]W[gi]
+)

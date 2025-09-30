@@ -20,6 +20,7 @@ mod board;
 mod chooser;
 mod dragon_go_server;
 mod drawing;
+mod game_parse;
 mod gtp;
 mod machine_game;
 mod reset;

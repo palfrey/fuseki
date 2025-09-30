@@ -2,6 +2,7 @@ use crate::{
     board::{Board, AVAILABLE_WIDTH},
     chooser::CURRENT_MODE,
     drawing::{draw_button, draw_multiline_text, refresh, refresh_with_options},
+    game_parse::get_game_data,
     reset::{draw_reset, reset_button_top_left, RESET_BUTTON_SIZE},
     routine::Routine,
 };
@@ -21,10 +22,6 @@ use libremarkable::{
 };
 use log::{error, info, warn};
 use serde::{de, Deserialize, Serialize};
-use sgf_parse::{
-    go::{parse, Move, Prop},
-    SgfNode,
-};
 use std::{
     fs,
     ops::Deref,
@@ -386,64 +383,33 @@ impl DragonGoServer {
                     .unwrap()
                     .text()
                     .unwrap();
-            let props = get_sgf_properties(&raw_sgf);
-            for prop in props {
-                match prop {
-                    Prop::W(white_move) => {
-                        if let Move::Move(point) = white_move {
-                            self.white_stones.push(Point2 {
-                                x: (point.x + 1),
-                                y: (point.y + 1),
-                            })
-                        }
-                    }
-                    Prop::B(black_move) => {
-                        if let Move::Move(point) = black_move {
-                            self.black_stones.push(Point2 {
-                                x: (point.x + 1),
-                                y: (point.y + 1),
-                            })
-                        }
-                    }
-                    Prop::AB(black_moves) => {
-                        for point in black_moves {
-                            self.black_stones.push(Point2 {
-                                x: (point.x + 1),
-                                y: (point.y + 1),
-                            })
-                        }
-                    }
-                    Prop::SZ(size) => {
-                        let board = Board::new(size.0);
-                        let undo_button_top_left = Point2 {
-                            x: (board.spare_width + AVAILABLE_WIDTH / 2 - 170) as i32,
-                            y: 20,
-                        };
-                        let commit_button_top_left = Point2 {
-                            x: (board.spare_width + AVAILABLE_WIDTH / 2 - 640) as i32,
-                            y: 20,
-                        };
-                        self.board_config = Some(BoardConfig {
-                            player_color: game.player_color.clone(),
-                            board,
-                            undo_button_top_left,
-                            commit_button_top_left,
-                            game_id: game.game_id,
-                            last_move_id: game.move_id,
-                            opponent_handle: game
-                                .opponent_handle
-                                .strip_prefix("'")
-                                .unwrap()
-                                .strip_suffix("'")
-                                .unwrap()
-                                .to_string(),
-                        });
-                    }
-                    other => {
-                        info!("Other prop: {other}")
-                    }
-                }
-            }
+            let mut game_data = get_game_data(&raw_sgf);
+            self.white_stones.append(&mut game_data.white_stones);
+            self.black_stones.append(&mut game_data.black_stones);
+            let board = Board::new(game_data.size);
+            let undo_button_top_left = Point2 {
+                x: (board.spare_width + AVAILABLE_WIDTH / 2 - 170) as i32,
+                y: 20,
+            };
+            let commit_button_top_left = Point2 {
+                x: (board.spare_width + AVAILABLE_WIDTH / 2 - 640) as i32,
+                y: 20,
+            };
+            self.board_config = Some(BoardConfig {
+                player_color: game.player_color.clone(),
+                board,
+                undo_button_top_left,
+                commit_button_top_left,
+                game_id: game.game_id,
+                last_move_id: game.move_id,
+                opponent_handle: game
+                    .opponent_handle
+                    .strip_prefix("'")
+                    .unwrap()
+                    .strip_suffix("'")
+                    .unwrap()
+                    .to_string(),
+            });
         } else {
             self.board_config = None;
         }
@@ -488,24 +454,6 @@ impl DragonGoServer {
             }
         }
     }
-}
-fn get_sgf_properties_for_node(node: &SgfNode<Prop>) -> Vec<Prop> {
-    let mut output = vec![];
-    for prop in node.properties() {
-        output.push(prop.clone());
-    }
-    for child in node.children() {
-        output.append(&mut get_sgf_properties_for_node(child));
-    }
-    output
-}
-
-fn get_sgf_properties(raw_sgf: &str) -> Vec<Prop> {
-    let mut output = vec![];
-    for node in parse(&raw_sgf).unwrap() {
-        output.append(&mut get_sgf_properties_for_node(&node));
-    }
-    output
 }
 
 impl Routine for DragonGoServer {

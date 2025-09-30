@@ -1,0 +1,42 @@
+(
+;FF[4]GM[1]
+AP[DGS:1.20.5]
+PC[Dragon Go Server: https://www.dragongoserver.net/]
+DT[2025-09-21,2025-09-28]
+GN[Katago-fuseki-test-1483922-20250928]
+SO[https://www.dragongoserver.net/game.php?gid=1483922]
+PB[Fuseki Test Account (fuseki-test)]
+PW[Katago (Katago)]
+BR[23k]
+WR[9d]
+XM[20]
+GC[Game ID: 1483922
+Game Type: GO (1:1)
+Rated: Y
+
+White Start Rating: 9d (-29%) - Elo rating 2870
+Black Start Rating: 23k (0%) - Elo rating -200]
+OT[30 days with 1 day extra per move]
+RU[Japanese]
+SZ[9]
+KM[0.5]
+HA[3]
+AB[gg][cg][gc]PL[W]
+;MN[1]W[de]
+;B[cc]
+;W[ff]
+;B[eg]
+;W[ec]
+;B[ce]
+;W[gf]
+;B[dc]
+;W[df]
+;B[ge]
+;W[fe]
+;B[eb]
+;W[dg]
+;B[hf]
+;W[he]
+;B[hg]
+;W[gd]
+)
