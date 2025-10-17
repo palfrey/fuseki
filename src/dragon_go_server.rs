@@ -460,6 +460,7 @@ impl Routine for DragonGoServer {
     fn init(&mut self, fb: &'static mut Framebuffer, _ctrl: &mut Engine) {
         let current_login_file = LOGIN_FILE.lock().expect("get login_file");
         let login_raw = fs::read(current_login_file.deref());
+        let mut other_error = false;
         let login_info: LoginInfo = match login_raw {
             Ok(raw) => match serde_json::from_slice(&raw) {
                 Ok(li) => li,
@@ -468,15 +469,19 @@ impl Routine for DragonGoServer {
                         "Error loading login data from {}: {}",
                         current_login_file, err
                     );
+                    self.error = Some(format!("Login data in {current_login_file} is wrongly formatted"));
+                    other_error = true;
                     LoginInfo::default()
                 }
             },
             Err(err) => {
                 warn!("Can't read login data from {}: {}", current_login_file, err);
+                self.error = Some(format!("Can't read login data from {current_login_file}"));
                 LoginInfo::default()
             }
         };
-        if login_info == LoginInfo::default() {
+        if login_info == LoginInfo::default() && !other_error {
+            self.error = Some(format!("Login data in {current_login_file} is default, please change"));
             let dumped = serde_json::to_vec_pretty(&login_info).expect("can dump login info");
             fs::write(current_login_file.deref(), dumped).expect("Can write login info");
             info!("Dumped default login file");
