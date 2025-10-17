@@ -6,6 +6,22 @@
 
 The [Toltec toolchain](https://github.com/toltec-dev/toolchain) is used for the build and we provide [Draft](https://github.com/dixonary/draft-reMarkable?tab=readme-ov-file#draft-remarkable) config for launching.
 
+## Usage instructions
+
+We have 3 modes: machine, Atari and Dragon Go Server
+
+### Machine game
+
+This is human v.s. machine, all running locally via Gnu Go. It'll get slower as the game goes on as Gnu Go is a pretty heavyweight thing for a Remarkable to run, even though I've dialed down it's accuracy.
+
+### Atari game
+
+This is a human v.s. human game of [Atari Go](https://senseis.xmp.net/?AtariGo). We use Gnu Go for move validation, but that's it.
+
+### Dragon Go Server
+
+To make this work, add your login for [Dragon Go Server](https://www.dragongoserver.net/) to `/opt/dragon-go-server-login`. It's a JSON file with `username` and `password` fields. The app will create a default file on first start of this mode if it doesn't exist. After that, it'll display whatever game in Dragon Go Server you'll lose first due to timeout. Select your move, click "commit" and it'll submit and go to your next game. If you're out of games, it'll show a refresh button, but will also update about every 10 minutes as well.
+ 
 ## Build instructions
 
 1. Checkout this repository (including submodules)
